@@ -42,7 +42,7 @@ docker compose up -d db && make dev   # API :8000, 웹 :3000
 | [40-frontend](docs/40-frontend.md) | 화면 구조, 화면별 명세, 문구 규칙 |
 | [50-quality](docs/50-quality.md) | 테스트·평가·데이터 검증, 공개 게이트 |
 | [60-legal-compliance](docs/60-legal-compliance.md) | 법적 가드레일 (금지 사항) |
-| [70-roadmap](docs/70-roadmap.md) | 13주 일정, 단계별 게이트, 축소 규칙 |
+| [70-roadmap](docs/70-roadmap.md) | 두 갈래(구현·사용자) 순서, 게이트 조건, 축소 규칙 |
 | [80-tasks](docs/80-tasks.md) | 작업 티켓 |
 | [90-glossary](docs/90-glossary.md) | 용어집 (코드 식별자 대응) |
 | [analysis/](analysis/README.md) | W0 데이터 검증 결과와 재현 스크립트 |
@@ -51,6 +51,7 @@ docker compose up -d db && make dev   # API :8000, 웹 :3000
 
 - 2026-10-08: W0 데이터 검증 완료 (서울 일반음식점 539,589건). 결과는 [`analysis/README.md`](analysis/README.md)
 - 2026-10-12: 설계 v1.1 (독립 검토 반영, 13주 일정: 2026-10-19 ~ 2027-01-15)
+- 2026-10-12: 설계 v1.2 (로드맵을 두 갈래 순서로 변경, Gate 2 전 법률 검토 필수)
 - 2026-10-12: `T-001` 저장소 골격
 - 2026-10-12: `T-002` Docker Compose · 헬스체크
 - 2026-10-12: `T-003` 마이그레이션 0001 (자리 이력 테이블). 적용: `cd services/api && uv run --env-file ../../.env alembic upgrade head`
