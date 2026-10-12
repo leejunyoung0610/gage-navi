@@ -377,10 +377,14 @@ Kleene 3치 논리.
 ### 10.2 문서 변환 (T-051)
 | 형식 | 방법 | 출력 |
 |---|---|---|
-| HWPX | zip 내 `Contents/section*.xml` 파싱, 문단·표 셀 순서 유지 | 텍스트 + `line_index` |
-| HWP | `hwp5txt`(pyhwp) | 텍스트 (표 구조 손실 가능 → 표는 `| 셀 | 셀 |` 행으로) |
-| PDF | pdfplumber, 페이지별 줄 | 텍스트 + 페이지·줄 |
-변환 실패 → `convert_status='failed'`, 관리자가 수동 텍스트 업로드(`manual`).
+방법은 T-051S 스파이크로 확정했다 (ADR-024, `reports/conversion_spike.md`).
+
+| 형식 | 방법 | 출력 |
+|---|---|---|
+| HWPX | 판정 보류(표본 없음) — 수동 텍스트 업로드. 표본이 생기면 zip 내 `Contents/section*.xml` 파싱을 재판정 | — |
+| HWP | olefile로 본문 스트림의 레코드 트리 직접 파싱. 문단은 한 줄, 표는 `| 셀 | 셀 |` 행(셀 안 문단은 ` / `로 연결). `hwp5txt`·pyhwp는 쓰지 않는다 | 텍스트 + 줄 (쪽 정보 없음) |
+| PDF | pdfplumber. 표 영역은 셀 단위 → `| 셀 | 셀 |` 행, 표 밖은 페이지별 줄. 셀 추출이 글자를 잃는 표는 줄 텍스트로 대체하고 표시 | 텍스트 + 페이지·줄 |
+변환 실패(글자 없는 PDF 페이지, HWP 암호·배포용 문서 포함) → `convert_status='failed'`, 관리자가 수동 텍스트 업로드(`manual`).
 
 ### 10.3 LLM 호출
 - Claude API tool use, 도구 1개(`emit_rules`), 입력 스키마 = DSL JSON Schema(배열). 도구 외 응답은 폐기
