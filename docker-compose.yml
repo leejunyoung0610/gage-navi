@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-gagenavi}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     ports:
-      - "5432:5432"
+      - "55432:5432"               # 호스트 55432 (로컬 PostgreSQL 5432·5433과 충돌 방지)
     volumes:
       - dbdata:/var/lib/postgresql/data
     healthcheck:
@@ -33,6 +33,7 @@ services:
       - ./storage:/app/storage     # 공고 첨부 원문 등 앱이 쓰는 파일 (gitignore)
 
   web:
+    profiles: ["web"]              # Dockerfile이 생기는 T-030에서 뗀다. 그 전에는 기본 `up`에서 제외
     build:
       context: ./apps/web          # Dockerfile은 T-030에서 작성
     env_file: .env

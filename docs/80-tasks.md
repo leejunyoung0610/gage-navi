@@ -25,7 +25,7 @@
 ### T-002 Docker Compose · 헬스체크 ⏱2h
 - **할 일**: `services/api/Dockerfile`, `docker-compose.yml`(이미 있는 초안 사용), `GET /api/v1/health`
 - **수용 기준**
-  - [ ] `docker compose up db api` 후 `/api/v1/health` → 200, `db: ok` (`web`은 Dockerfile이 생기는 T-030부터)
+  - [ ] `docker compose up` 후 `/api/v1/health` → 200, `db: ok`
   - [ ] DB 중지 시 503 + 오류 코드 `SERVICE_UNAVAILABLE` (docs/30 §1)
 - **참고**: docs/30 §1·2
 
@@ -182,7 +182,7 @@
 - **참고**: docs/30 §1·3, docs/60 §3
 
 ### T-030 웹 기반 ⏱4h
-- **할 일**: `apps/web/Dockerfile`(compose `web` 서비스), 서버 컴포넌트는 `API_INTERNAL_URL`, 브라우저는 `NEXT_PUBLIC_API_BASE_URL` 사용. 레이아웃·헤더·푸터·`BetaBanner`, 디자인 토큰(본문 17px), `lib/format.ts`, PWA manifest·Serwist, 전역 `noindex`(`INDEXING_ENABLED`), **`lib/profile-store.ts` 골격**(키 `gn.profile.v1`, 이 시점 스키마는 `region`만. T-061은 **optional 필드만 추가**하므로 `schema_version` 1 유지 — 기존 저장값이 그대로 유효), **`app/api/revalidate/route.ts`**(비밀 헤더 검증 후 `revalidatePath`)
+- **할 일**: `apps/web/Dockerfile`(compose `web` 서비스 — Dockerfile을 만들면서 `docker-compose.yml`의 `profiles: ["web"]`을 뗀다), 서버 컴포넌트는 `API_INTERNAL_URL`, 브라우저는 `NEXT_PUBLIC_API_BASE_URL` 사용. 레이아웃·헤더·푸터·`BetaBanner`, 디자인 토큰(본문 17px), `lib/format.ts`, PWA manifest·Serwist, 전역 `noindex`(`INDEXING_ENABLED`), **`lib/profile-store.ts` 골격**(키 `gn.profile.v1`, 이 시점 스키마는 `region`만. T-061은 **optional 필드만 추가**하므로 `schema_version` 1 유지 — 기존 저장값이 그대로 유효), **`app/api/revalidate/route.ts`**(비밀 헤더 검증 후 `revalidatePath`)
 - **수용 기준**
   - [ ] `lib/format` 테스트: docs/40 §6 예시 전부
   - [ ] `profile-store`: 저장·읽기·삭제, `localStorage` 예외 시에도 동작 테스트
@@ -465,4 +465,5 @@
 
 | ID | 제목 | 이유 | 제안일 |
 |---|---|---|---|
-| | | | |
+| (미정) | 422·500 공통 오류 핸들러 | 지금은 `ApiError`만 docs/30 §1 형식으로 나간다. 요청 검증 실패(`VALIDATION_ERROR`, `details.fields`)와 처리되지 않은 예외(`INTERNAL`, 일반 문구)는 FastAPI 기본 형식 그대로다. 첫 공개 API(T-021·T-022) 전에 필요 | 2026-10-12 |
+| (미정) | 요청 ID 미들웨어 | 지금은 오류 응답을 만들 때만 `request_id`를 생성한다. 요청마다 한 번 만들어 성공 응답 `meta.request_id`와 로그(요청 ID·경로·상태 코드·지연 시간, docs/01 §6)에 같은 값을 써야 한다 | 2026-10-12 |
