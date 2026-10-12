@@ -1,0 +1,346 @@
+# 04. 데이터 모델 (PostgreSQL 16 + PostGIS)
+
+> 마이그레이션은 Alembic으로만. §2 = `0001_location`(T-003), §3 = `0002_rules`(T-005). 아래 DDL은 기준 명세이며, 구현 시 이름·타입·제약을 그대로 따른다. 변경은 이 문서를 먼저 고친다.
+
+## 1. 공통 규칙
+
+- 시각은 `TIMESTAMPTZ`(UTC 저장, 표시는 Asia/Seoul). 날짜는 `DATE`.
+- 금액은 `BIGINT`(원). 비율은 `NUMERIC(6,4)`.
+- 상태값은 `TEXT + CHECK`(PostgreSQL ENUM 사용 안 함 — 마이그레이션 단순화).
+- 모든 파생 테이블에 `method_version`(계산 로직 버전) 또는 `parse_version`을 둔다. 값 형식: `YYYY.MM.N` (예: `2026.10.1`).
+
+## 2. 자리 이력 (`location`)
+
+```sql
+CREATE EXTENSION IF NOT EXISTS postgis;
+
+-- 수집 단위(파일 또는 API 실행 1회)
+CREATE TABLE data_snapshot (
+  id                BIGSERIAL PRIMARY KEY,
+  source            TEXT NOT NULL CHECK (source IN ('license_file','license_api')),
+  license_type      TEXT NOT NULL CHECK (license_type IN ('general_restaurant','rest_restaurant','bakery')),
+  fetched_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  source_updated_max TIMESTAMPTZ,            -- 원천 데이터갱신시점 최댓값
+  row_count         INT NOT NULL,
+  file_sha256       TEXT,
+  validation        JSONB NOT NULL DEFAULT '{}'::jsonb,   -- docs/50 §2 검사 결과
+  status            TEXT NOT NULL CHECK (status IN ('loaded','validated','failed'))
+);
+
+-- 원본 행 보관 (컬럼명 원문 그대로)
+CREATE TABLE license_raw (
+  id            BIGSERIAL PRIMARY KEY,
+  snapshot_id   BIGINT NOT NULL REFERENCES data_snapshot(id) ON DELETE CASCADE,
+  license_type  TEXT NOT NULL,
+  mgmt_no       TEXT NOT NULL,
+  payload       JSONB NOT NULL,
+  UNIQUE (snapshot_id, license_type, mgmt_no)
+);
+
+-- 법정동코드 (폐지 코드 포함)
+CREATE TABLE legal_dong (
+  code        CHAR(10) PRIMARY KEY,
+  sido        TEXT NOT NULL,
+  sigungu     TEXT,
+  eupmyeondong TEXT,
+  ri          TEXT,
+  full_name   TEXT NOT NULL,            -- '서울특별시 광진구 화양동'
+  abolished   BOOLEAN NOT NULL DEFAULT false
+);
+CREATE INDEX legal_dong_full_name_idx ON legal_dong (full_name);
+
+-- 정규화된 업소 기록 (license_type + mgmt_no 당 1행, 최신 상태)
+CREATE TABLE license_record (
+  id                BIGSERIAL PRIMARY KEY,
+  license_type      TEXT NOT NULL CHECK (license_type IN ('general_restaurant','rest_restaurant','bakery')),
+  mgmt_no           TEXT NOT NULL,
+  jurisdiction_code TEXT NOT NULL,
+  name              TEXT NOT NULL,
+  biz_category      TEXT,
+  status            TEXT NOT NULL CHECK (status IN ('open','closed','suspended','other')),
+  status_raw        TEXT NOT NULL,
+  opened_on         DATE,
+  closed_on         DATE,
+  area_m2           NUMERIC(10,2),
+  jibun_addr        TEXT,
+  road_addr         TEXT,
+  pnu               CHAR(19),            -- 파싱 실패 시 NULL
+  sigungu_code      CHAR(5),             -- 법정동코드 앞 5자리
+  floor             TEXT,                -- '1','2',…,'B1','B2' / 파싱 실패 NULL
+  floor_source      TEXT CHECK (floor_source IN ('jibun_tail','road_detail')),
+  ho_list           TEXT[] NOT NULL DEFAULT '{}',
+  geom              GEOMETRY(Point, 4326),
+  bulk_closure      BOOLEAN NOT NULL DEFAULT false,   -- ADR-020
+  stale_suspect     BOOLEAN NOT NULL DEFAULT false,   -- ADR-023
+  source_updated_at TIMESTAMPTZ,
+  last_snapshot_id  BIGINT REFERENCES data_snapshot(id),
+  parse_version     TEXT NOT NULL,
+  UNIQUE (license_type, mgmt_no),
+  CHECK (closed_on IS NULL OR opened_on IS NULL OR closed_on >= opened_on)
+);
+CREATE INDEX license_record_floor_idx ON license_record (pnu, floor);
+CREATE INDEX license_record_geom_idx  ON license_record USING GIST (geom);
+CREATE INDEX license_record_closed_idx ON license_record (jurisdiction_code, closed_on) WHERE status = 'closed';
+
+-- 필지(PNU) 요약 — 자리 페이지 1단계
+CREATE TABLE parcel (
+  pnu             CHAR(19) PRIMARY KEY,
+  legal_dong_code CHAR(10) NOT NULL REFERENCES legal_dong(code),
+  jibun_label     TEXT NOT NULL,         -- '서울특별시 광진구 화양동 47-1'
+  road_addr       TEXT,                  -- 가장 최근 기록의 도로명주소(상세 제외)
+  geom            GEOMETRY(Point, 4326),
+  floors          TEXT[] NOT NULL,       -- 이력이 있는 층, 정렬: B2,B1,1,2,…
+  record_count    INT NOT NULL,
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 층키 요약
+CREATE TABLE floor_summary (
+  pnu               CHAR(19) NOT NULL REFERENCES parcel(pnu),
+  floor             TEXT NOT NULL,
+  record_count      INT NOT NULL,
+  records_since_2005 INT NOT NULL,
+  open_now_count    INT NOT NULL,
+  median_closed_tenure_days INT,          -- 폐업 업소 영업기간 중앙값 (bulk 제외)
+  has_concurrent    BOOLEAN NOT NULL,     -- 동시 영업 기록 존재 → "여러 점포" 안내
+  method_version    TEXT NOT NULL,
+  PRIMARY KEY (pnu, floor)
+);
+
+-- 기록별 과거 폐업 횟수 (층키 기준, docs/10 §6)
+CREATE TABLE record_prior (
+  record_id             BIGINT PRIMARY KEY REFERENCES license_record(id) ON DELETE CASCADE,
+  prior_closures_floor  INT NOT NULL,
+  method_version        TEXT NOT NULL,
+  computed_at           TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 기준율 (월 1회 계산, 화면에서 읽기 전용)
+CREATE TABLE base_rate (
+  id             BIGSERIAL PRIMARY KEY,
+  snapshot_label TEXT NOT NULL,            -- '2026-11'
+  method_version TEXT NOT NULL,
+  scope_code     TEXT NOT NULL,            -- '11'(서울 전체) 또는 시군구 5자리
+  license_group  TEXT NOT NULL DEFAULT 'food3',   -- MVP: 식품 3종 통합. 'general_restaurant' 등 개별은 n 충족 시
+  prior_bucket   TEXT NOT NULL CHECK (prior_bucket IN ('0','1','2','3','4+')),
+  n              INT NOT NULL,
+  events         INT NOT NULL,             -- 3년 내 폐업 수
+  rate           NUMERIC(6,4) NOT NULL,
+  ci_low         NUMERIC(6,4) NOT NULL,    -- Wilson 95%
+  ci_high        NUMERIC(6,4) NOT NULL,
+  cohort_from    DATE NOT NULL,
+  cohort_to      DATE NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (snapshot_label, method_version, scope_code, license_group, prior_bucket)
+);
+
+-- 모형 카드 (방법론 페이지 데이터)
+CREATE TABLE model_card (
+  id             BIGSERIAL PRIMARY KEY,
+  snapshot_label TEXT NOT NULL,
+  method_version TEXT NOT NULL,
+  payload        JSONB NOT NULL,           -- docs/10 §7.3 형식
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (snapshot_label, method_version)
+);
+
+-- 정정·삭제 요청 (연락처 수집 안 함)
+CREATE TABLE correction_request (
+  id          BIGSERIAL PRIMARY KEY,
+  pnu         CHAR(19) NOT NULL,
+  floor       TEXT,
+  record_id   BIGINT REFERENCES license_record(id),
+  kind        TEXT NOT NULL CHECK (kind IN ('wrong_info','remove_request','other')),
+  message     TEXT NOT NULL CHECK (char_length(message) <= 1000),
+  status      TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','resolved','rejected')),
+  resolution_note TEXT,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  resolved_at TIMESTAMPTZ
+);
+
+-- 숨김 처리 (정정 요청 승인 결과)
+CREATE TABLE record_suppression (
+  record_id   BIGINT PRIMARY KEY REFERENCES license_record(id),
+  reason      TEXT NOT NULL,
+  request_id  BIGINT REFERENCES correction_request(id),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+## 3. 규칙 (`rules`, `funding`, `closure`)
+
+> 마이그레이션 `0002_rules`(T-005). `admin_user`도 여기 포함.
+
+```sql
+CREATE TABLE source_site (
+  id          BIGSERIAL PRIMARY KEY,
+  name        TEXT NOT NULL,
+  kind        TEXT NOT NULL CHECK (kind IN ('api','page')),
+  url         TEXT NOT NULL,
+  active      BOOLEAN NOT NULL DEFAULT true
+);
+
+CREATE TABLE announcement (
+  id            BIGSERIAL PRIMARY KEY,
+  source_site_id BIGINT NOT NULL REFERENCES source_site(id),
+  external_id   TEXT NOT NULL,
+  version       INT NOT NULL DEFAULT 1,
+  title         TEXT NOT NULL,
+  agency        TEXT,
+  url           TEXT NOT NULL,
+  published_on  DATE,
+  content_hash  TEXT NOT NULL,
+  fetched_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (source_site_id, external_id, version)
+);
+
+CREATE TABLE document (
+  id             BIGSERIAL PRIMARY KEY,
+  announcement_id BIGINT NOT NULL REFERENCES announcement(id),
+  file_name      TEXT NOT NULL,
+  format         TEXT NOT NULL CHECK (format IN ('hwp','hwpx','pdf','html')),
+  storage_path   TEXT NOT NULL,
+  file_sha256    TEXT NOT NULL,
+  text           TEXT,                     -- 변환 결과
+  line_index     JSONB,                    -- [{line_no, page, start_char, end_char}]
+  converter      TEXT,                     -- 'hwpx-xml@1' 등
+  converted_at   TIMESTAMPTZ,
+  convert_status TEXT NOT NULL DEFAULT 'pending' CHECK (convert_status IN ('pending','ok','failed','manual'))
+);
+
+CREATE TABLE program (
+  id          TEXT PRIMARY KEY,            -- 'sbiz.general_stability' 처럼 연도 없는 안정 키
+  module      TEXT NOT NULL CHECK (module IN ('funding','closure')),
+  name        TEXT NOT NULL,
+  agency      TEXT NOT NULL,
+  level       TEXT NOT NULL CHECK (level IN ('national','local')),
+  region_code TEXT,                        -- '11' 서울 / NULL 전국
+  tags        TEXT[] NOT NULL DEFAULT '{}',
+  official_url TEXT,
+  active      BOOLEAN NOT NULL DEFAULT true
+);
+
+CREATE TABLE extraction (
+  id              BIGSERIAL PRIMARY KEY,
+  announcement_id BIGINT NOT NULL REFERENCES announcement(id),
+  model           TEXT NOT NULL,
+  prompt_version  TEXT NOT NULL,
+  dsl_version     TEXT NOT NULL,
+  auto_checks     JSONB NOT NULL DEFAULT '{}'::jsonb,
+  status          TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','reviewed')),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE extraction_item (
+  id                  BIGSERIAL PRIMARY KEY,
+  extraction_id       BIGINT NOT NULL REFERENCES extraction(id) ON DELETE CASCADE,
+  program_id          TEXT REFERENCES program(id),   -- 검수 시 연결
+  proposed_program_key TEXT NOT NULL,
+  output              JSONB NOT NULL,                -- 규칙 DSL 초안
+  needs_review_fields TEXT[] NOT NULL DEFAULT '{}',
+  status              TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+  reviewed_at         TIMESTAMPTZ
+);
+
+CREATE TABLE rule (
+  id                 BIGSERIAL PRIMARY KEY,
+  program_id         TEXT NOT NULL REFERENCES program(id),
+  version            INT NOT NULL,
+  dsl_version        TEXT NOT NULL,
+  body               JSONB NOT NULL,                 -- docs/20 §2 스키마, 서버에서 Pydantic 검증 후 저장
+  status             TEXT NOT NULL CHECK (status IN ('draft','approved','retired')),
+  approved_by        TEXT,
+  approved_at        TIMESTAMPTZ,
+  valid_from         DATE,
+  valid_to           DATE,
+  extraction_item_id BIGINT REFERENCES extraction_item(id),
+  UNIQUE (program_id, version),
+  CHECK (status <> 'approved' OR (approved_by IS NOT NULL AND approved_at IS NOT NULL))
+);
+-- 한 프로그램에 approved 규칙은 동시에 1개
+CREATE UNIQUE INDEX rule_one_approved ON rule (program_id) WHERE status = 'approved';
+
+CREATE TABLE evidence (
+  id          BIGSERIAL PRIMARY KEY,
+  rule_id     BIGINT NOT NULL REFERENCES rule(id) ON DELETE CASCADE,
+  ev_key      TEXT NOT NULL,              -- 'E1'
+  document_id BIGINT NOT NULL REFERENCES document(id),
+  quote       TEXT NOT NULL CHECK (char_length(quote) <= 500),
+  loc         TEXT NOT NULL,              -- 'p3:l12-14'
+  similarity  NUMERIC(4,3) NOT NULL CHECK (similarity BETWEEN 0 AND 1),  -- 원문 대조 점수 0~1 (docs/20 §10.4)
+  UNIQUE (rule_id, ev_key)
+);
+
+CREATE TABLE change_event (
+  id              BIGSERIAL PRIMARY KEY,
+  announcement_id BIGINT NOT NULL REFERENCES announcement(id),
+  target          TEXT NOT NULL CHECK (target IN ('page','attachment')),
+  prev_hash       TEXT,
+  new_hash        TEXT NOT NULL,
+  diff            TEXT,
+  detected_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  review_status   TEXT NOT NULL DEFAULT 'open' CHECK (review_status IN ('open','done'))
+);
+
+CREATE TABLE review_log (
+  id                 BIGSERIAL PRIMARY KEY,
+  review_kind        TEXT NOT NULL CHECK (review_kind IN ('field_edit','approve','reject','second_review')),
+  extraction_item_id BIGINT REFERENCES extraction_item(id),
+  rule_id            BIGINT REFERENCES rule(id),
+  field_path         TEXT,                -- JSON Pointer (field_edit일 때 필수)
+  before             JSONB,
+  after              JSONB,
+  note               TEXT,                -- second_review: "원문 대조 이상 없음" 또는 발견 사항
+  reviewer           TEXT NOT NULL,
+  seconds_spent      INT NOT NULL,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (review_kind <> 'field_edit' OR (extraction_item_id IS NOT NULL AND field_path IS NOT NULL)),
+  CHECK (review_kind <> 'second_review' OR rule_id IS NOT NULL)
+);
+
+-- 변동금리 기준값 (관리자가 갱신, 엔진 입력 rate_bases)
+CREATE TABLE rate_base (
+  id          BIGSERIAL PRIMARY KEY,
+  name        TEXT NOT NULL,               -- 'policy_base_rate' 등, 규칙 benefit.rate.base 값과 일치
+  annual_pct  NUMERIC(6,3) NOT NULL,
+  as_of       DATE NOT NULL,
+  source_url  TEXT NOT NULL,
+  updated_by  TEXT NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (name, as_of)
+);
+
+CREATE TABLE eval_case (
+  id              BIGSERIAL PRIMARY KEY,
+  announcement_id BIGINT NOT NULL REFERENCES announcement(id),
+  split           TEXT NOT NULL CHECK (split IN ('dev','test')),
+  gold            JSONB NOT NULL,         -- 공고 1건 → 규칙 배열 (사람 라벨)
+  labeled_by      TEXT NOT NULL,
+  labeled_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  relabel_of      BIGINT REFERENCES eval_case(id)    -- 일관성 측정용 재라벨
+);
+
+CREATE TABLE eval_run (
+  id             BIGSERIAL PRIMARY KEY,
+  prompt_version TEXT NOT NULL,
+  model          TEXT NOT NULL,
+  split          TEXT NOT NULL CHECK (split IN ('dev','test')),
+  metrics        JSONB NOT NULL,          -- docs/50 §5 형식 (점추정 + 95% CI)
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE admin_user (
+  id            BIGSERIAL PRIMARY KEY,
+  username      TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+충돌·한도 그룹·순서 효과는 규칙 `body` 안에 저장한다(docs/20 §2). 엔진은 승인 규칙 로드 시 이를 모아 그래프를 만든다.
+
+## 4. 사용자 프로필 (서버 비저장 — 클라이언트 스키마)
+
+`BusinessProfile`은 DB 테이블이 없다. 스키마 정본은 `services/api/app/common/profile.py`(Pydantic)이고, 프론트는 OpenAPI에서 생성된 타입 + zod 스키마를 쓴다. 필드 정의는 docs/21 §3, docs/22 §3.
+
+브라우저 저장 키: `gn.profile.v1` (값: `{schema_version: 1, updated_at, profile}`). 스키마 버전이 오르면 `lib/profile-store.ts`의 마이그레이션 함수로 변환한다.

@@ -1,0 +1,18 @@
+---
+description: 규칙 엔진·정책자금·폐업 지원 모듈 규칙
+globs: services/api/app/rules/**, services/api/app/funding/**, services/api/app/closure/**, services/api/tests/**/rules/**
+alwaysApply: false
+---
+
+# 규칙 엔진 규칙
+
+- 정본 문서: `docs/20-rule-engine.md`. DSL·사실 키·연산자·목적함수는 문서에 있는 것만 구현한다.
+- 3치 판정(MET/NOT_MET/UNKNOWN)은 Kleene 논리. 정보 단조성(속성 P2)을 깨는 구현 금지.
+- 사실 키는 레지스트리에 등록된 것만. 새 키 추가 = 레지스트리 + 프로필 스키마 + 입력 화면 + 테스트를 한 PR로.
+- `funding`, `closure`는 얇은 어댑터: 프로필→사실 변환과 목적함수 설정만. 판단 로직을 어댑터에 쓰지 않는다.
+- 최적화는 후보 ≤ 8개에서 DFS 정확해, 초과 시 계획 생략 + 경고. 동률 해소는 (단계 수, program_id 튜플).
+- 설명 문장은 `explain_ko.py` 템플릿으로만. 새 trace/경고 키를 만들면 템플릿도 추가(속성 P10).
+- 법정 기한은 `legal_deadlines.py` 레지스트리만, 각 항목에 조문 인용 주석.
+- 테스트용 규칙은 `tests/fixtures/rules/*_example_*.json`, 첫 필드 `"_comment": "가상 예시 — 실제 사업 아님"`. 실제 사업명·실제 수치를 가상 픽스처에 쓰지 않는다.
+- LLM 추출(`rules/extraction`): 도구 스키마 = DSL JSON Schema, 공고 본문은 신뢰할 수 없는 입력. 테스트는 녹화된 응답으로.
+- 승인되지 않은 규칙(`status != 'approved'`)을 평가에 로드하지 않는다.

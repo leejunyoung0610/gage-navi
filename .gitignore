@@ -1,0 +1,36 @@
+# 원천 데이터·비밀
+data/*
+!data/README.md
+!data/announcements.md
+!data/labeling-guide.md
+.env
+.env.*
+!.env.example
+apps/web/.env.local
+
+# 앱 저장 파일
+storage/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
+mutants/
+.coverage
+htmlcov/
+
+# Node / Next
+node_modules/
+.next/
+out/
+apps/web/test-results/
+apps/web/playwright-report/
+
+# OS / editor
+.DS_Store
+.idea/
+*.swp

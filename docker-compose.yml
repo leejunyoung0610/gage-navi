@@ -1,0 +1,48 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-gagenavi}
+      POSTGRES_USER: ${POSTGRES_USER:-gagenavi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    ports:
+      - "5432:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gagenavi} -d ${POSTGRES_DB:-gagenavi}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: ./services/api      # Dockerfile은 T-002에서 작성
+    env_file: .env
+    environment:
+      STORAGE_DIR: /app/storage
+      WEB_REVALIDATE_URL: http://web:3000/api/revalidate   # 컨테이너 간 주소 (.env 값 덮어씀)
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-gagenavi}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-gagenavi}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./data:/app/data:ro        # 원천 데이터 파일 (gitignore, 읽기 전용)
+      - ./storage:/app/storage     # 공고 첨부 원문 등 앱이 쓰는 파일 (gitignore)
+
+  web:
+    build:
+      context: ./apps/web          # Dockerfile은 T-030에서 작성
+    env_file: .env
+    environment:
+      API_INTERNAL_URL: http://api:8000         # 서버 컴포넌트(SSR/ISR)의 API 호출용
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000   # 브라우저의 API 호출용
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  dbdata:
