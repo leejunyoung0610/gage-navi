@@ -71,10 +71,10 @@
 - **참고**: docs/03 D1·D2
 
 ### T-011 법정동코드 · PNU ⏱3h
-- **할 일**: `legal_dong` 적재(폐지 코드 포함), `app/address/pnu.py` — `parse_jibun(addr) -> JibunParts | None`, `to_pnu(parts) -> str | None`
+- **할 일**: `legal_dong` 적재(`jobs.ingest_legal_dong --file PATH`. 제공 파일은 현행 코드만. 폐지 동명 때문에 조회에 실패한 건수를 리포트에 따로 남기고, 전체 실패율이 0.5% 안이면 폐지 코드는 적재하지 않는다), `app/address/pnu.py` — `parse_jibun(addr) -> JibunParts | None`, `to_pnu(parts, index) -> str | None` (`index`: `legal_dong` 행으로 만든 조회 표. 같은 이름에 코드가 여럿일 때의 규칙은 docs/10 §2.1)
 - **수용 기준**
   - [ ] docs/10 §2.1 표 전부 + 추가 12개 이상 테스트
-  - [ ] **PNU 생성 실패율 < 0.5%** (정의: docs/10 §2.1), 실패 상위 20개를 `reports/pnu_failures.md`로 저장
+  - [ ] **PNU 생성 실패율 < 0.5%** (정의: docs/10 §2.1), 실패 상위 20개를 `reports/pnu_failures.md`로 저장 (`jobs.measure_pnu`)
 - **참고**: docs/10 §2
 
 ### T-014 좌표계 확정 · 변환 ⏱3h
