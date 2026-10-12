@@ -3,7 +3,7 @@
 ## 사용법 (Cursor·사람 공통)
 
 - **티켓 하나 = 브랜치 하나 = PR 하나.** 브랜치명 `t-012-floor-parser`
-- **주차 배정의 정본은 docs/70 §1 표.** 이 문서는 단계별로 묶여 있고, 같은 단계 안에서도 docs/70의 주차 순서를 따른다
+- **티켓 순서의 정본은 docs/70 §1.** 이 문서는 주제별 단계로 묶여 있고, 실제 진행 순서는 docs/70 §1.1(구현 갈래)을 따른다. 🧑 작업의 순서는 docs/70 §1.2(사용자 갈래)
 - 시작 전: 티켓의 "참고" 문서를 읽는다. 문서끼리 또는 문서와 티켓이 충돌하면 **구현을 멈추고 사용자에게 확인한 뒤, 문서를 먼저 고치고** 진행한다 (AGENTS.md §1)
 - 완료 = **수용 기준 전부 충족** + `make check` 통과. PR 설명에 수용 기준 체크리스트를 복사해 체크한다
 - 티켓 범위 밖 수정 금지. 필요한 일은 하단 "제안 티켓"에 추가한다
@@ -11,7 +11,7 @@
 
 ---
 
-## 1단계 — 기반·수집 (W1~W2)
+## 1단계 — 기반·수집
 
 ### T-001 저장소 골격 ⏱4h
 - **할 일**: docs/01 §3 구조 생성. `services/api`(uv, Python 3.12, FastAPI·Pydantic v2·SQLAlchemy 2 async·asyncpg·Alembic·pandas·numpy·pyproj·statsmodels / dev: pytest·hypothesis·ruff·mypy·import-linter·mutmut). `apps/web`(pnpm, Next.js 15 App Router·TypeScript strict·Tailwind·ESLint·Prettier·Vitest·Playwright). `Makefile`(setup, check, test, dev, e2e, gen-api). pre-commit(ruff, prettier). `storage/` 폴더(gitignore)
@@ -98,7 +98,7 @@
 
 ---
 
-## 2단계 — 정규화 (W3)
+## 2단계 — 정규화
 
 ### T-012 층 파서 ⏱3h
 - **할 일**: `app/location/normalize/floor_parser.py` (docs/10 §3)
@@ -136,7 +136,7 @@
 
 ---
 
-## 3단계 — 이력·통계·API (W4~W5)
+## 3단계 — 이력·통계·API
 
 ### T-018 층 이력 · 과거 폐업 횟수 ⏱4h
 - **할 일**: `parcel`, `floor_summary`, `record_prior` 빌드 (`jobs.build_history`). 과거 폐업 횟수는 층키별 정렬 + 이진 탐색으로 벡터화(`analysis/w0_location_signal.py`의 `prior_closures` 방식)
@@ -205,7 +205,7 @@
 
 ---
 
-## 4단계 — 자리 이력 웹 · Gate 1 (W6)
+## 4단계 — 자리 이력 웹 · Gate 1
 
 ### T-033 필지 · 층 이력 페이지 ⏱6h
 - **할 일**: `/place/[pnu]`, `/place/[pnu]/[floor]` (SSR+ISR), `FloorTimeline`, `BaseRateCard`, notices, 정정 요청 시트, "이 자리로 정책자금 알아보기"(`profile-store`에 `region.sido_code`, `region.sigungu_code` 저장)
@@ -242,7 +242,7 @@
 
 ---
 
-## 5단계 — 규칙 엔진 ①~③ (W7)
+## 5단계 — 규칙 엔진 ①~③
 
 ### T-040 DSL 모델 · 검증 ⏱4h
 - **할 일**: `app/rules/dsl` Pydantic 모델(docs/20 §2), `jobs.export_dsl_schema`, 승인 전 검증 함수(ev 필수, 사실 레지스트리, op/value 타입, `deduct_balance.of`는 태그만, procedure DAG). 가상 규칙 픽스처 `tests/fixtures/rules/{funding,closure}_example_*.json`. 그때까지 만든 라벨 JSON을 전부 검증해 고친다
@@ -282,7 +282,7 @@
 
 ---
 
-## 6단계 — 규칙 엔진 ④~⑥ (W8)
+## 6단계 — 규칙 엔진 ④~⑥
 
 ### T-045 최적화기 ⏱6h
 - **수용 기준**
@@ -313,7 +313,7 @@
 
 ---
 
-## 7단계 — 수집·추출·검수 (W9~W10)
+## 7단계 — 수집·추출·검수
 
 ### T-050 공고 수집기 · 변경 감지 ⏱4h
 - **수용 기준**
@@ -375,7 +375,7 @@
 
 ---
 
-## 8단계 — 정책자금 · Gate 2 (W11)
+## 8단계 — 정책자금 · Gate 2
 
 ### T-060b 정책자금 규칙 확정 ⏱6h 🧑
 - **할 일**: 🧑 추출 → 검수 → 승인 → **24시간 이후 2차 검수**(`/rules/{id}/second-review`) → 사업별 골든 테스트 2개 이상
@@ -407,7 +407,7 @@
 
 ---
 
-## 9단계 — 폐업 지원 · 통합 · 배포 (W12~W13)
+## 9단계 — 폐업 지원 · 통합 · 배포
 
 ### T-070 폐업 지원 규칙 ⏱6h 🧑
 - **수용 기준**
