@@ -38,6 +38,7 @@
 `{"status": "ok", "db": "ok", "location_snapshot": "2026-11", "approved_rules": 14}`
 
 - 공통 응답(§1)의 예외: 성공 응답을 `data`/`meta`로 감싸지 않는다 (모니터링 도구용). 오류는 §1 형식 그대로 503 `SERVICE_UNAVAILABLE`
+- `location_snapshot`은 정규화까지 통과한(`validated`) 종류별 최신 스냅샷의 `source_updated_max` 중 가장 이른 값의 연-월(Asia/Seoul, `YYYY-MM`). 식품 3종 합산 통계의 기준일과 같은 날짜에서 나온다(T-019). `validated` 스냅샷이 하나도 없으면 `null`
 - `location_snapshot`·`approved_rules`는 값을 알 수 없으면 `null`. 채우는 시점: `location_snapshot`은 T-016(`data_snapshot` 기록), `approved_rules`는 T-055(규칙 버전 배포). 그 전에는 항상 `null`
 
 ### `GET /api/v1/address/search?q={검색어}&page={1}`

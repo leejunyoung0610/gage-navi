@@ -7,6 +7,17 @@
 - **데이터**: 서울, 식품 3종 인허가 (docs/03 D1)
 - **하지 않는 것**: 위험 점수, 매출·상권 추정, 평가적 표현 (ADR-005, docs/60 §3)
 
+### 1.1 범위에서 빼는 기록 (T-016에서 정함, 2026-10-13)
+
+| 대상 | 처리 | 근거 |
+|---|---|---|
+| 주소가 서울 밖인 행 (`지번주소`·`도로명주소` 둘 다 `서울특별시`로 시작하지 않음) | 정규화에서 제외, `license_record`에 넣지 않는다. 수는 `validation.normalize.non_seoul_excluded` | 2026-10 파일: 일반음식점 14, 휴게음식점 9, 제과점영업 2 |
+| 고정된 자리가 없는 업태: `업태구분명`이 `푸드트럭`, `이동조리` | `license_record.no_fixed_place = true`. 기록은 남기되 **자리 이력(§7.1)·과거 폐업 횟수·통계(§7.2)에서 제외**. 수는 `validation.normalize.no_fixed_place` | 주소가 영업 장소가 아니라 차량·행사장이다. 푸드트럭 1,254건(층 표기 10%, 꼬리에 `여의도한강공원 물빛광장(차량번호)` 등), 이동조리 101건(꼬리의 44%가 `차량번호NN`). 비교: 한식은 층 표기 48% |
+| 편의점 (`업태구분명 = '편의점'`, 13,291건) | **자리 이력에는 표시**한다. 기준율 통계(§7.2 코호트)에서는 기본 제외. `biz_category`를 그대로 보존해 T-019가 포함/제외 민감도를 비교한다 | 음식점과 폐업 양상이 다른 업태가 휴게음식점 인허가에 섞여 있다 |
+
+- `출장조리`(430건)는 빼지 않는다. 조리장 주소가 있고 층 표기 비율(54%)이 한식과 비슷하다
+- `업태구분명` 원문 값 전체 목록과 건수는 `data/README.md`. 새 값이 생겨도 실패로 보지 않는다(값은 그대로 `biz_category`에 둔다)
+
 ## 2. PNU 생성
 
 PNU(필지고유번호, 19자리) = `법정동코드(10)` + `산 여부(1: 일반 '1', 산 '2')` + `본번(4, 0 채움)` + `부번(4, 0 채움)`
@@ -178,6 +189,8 @@ m(j)    = 관할 j에서 폐업이 1건 이상 있었던 날들의 c(j, d) 중�
 bulk(j, d) = c(j, d) >= 30 AND c(j, d) >= 10 * m(j)
 ```
 - 해당 (j, d)의 기록 전체에 `bulk_closure=true`
+- 탐지된 (j, d)마다 관할 이름·건수·중앙값을 `closure_surge_day`에 저장한다(docs/04). 화면의 "폐업 처리 몰린 날" 설명(docs/40 §4.4)이 이 값을 쓴다. 관할 이름은 원천에 없으므로(코드만 있다) 그 관할 기록의 지번주소(없으면 도로명주소)에 가장 많이 나온 시군구 이름으로 정한다
+- 계산 대상은 `license_record`에 들어가는 기록 전체(§1.1의 서울 밖 행은 빠지고, `no_fixed_place` 기록은 포함 — 관할이 처리한 폐업 건수라는 사실을 센다)
 - 지표: 탐지 날짜 수, 기록 수를 `data_snapshot.validation`에 기록
 - 이 규칙이 말하는 것은 **"그날 그 관할에서 평소보다 훨씬 많은 폐업이 처리됐다"는 사실**뿐이다. "행정 일괄 정리"라는 해석은 검증하지 못했다(ADR-020 측정 기록). 화면 문구도 사실만 쓴다(docs/40 §4.4)
 - 측정(T-015): `python -m jobs.measure_bulk_closure` → `reports/bulk_closure.md`. 식품 3종 원천(704,141행)에서 탐지 (관할, 날짜) 495개(서로 다른 날짜 481일), 기록 45,850건. W0 방식과의 일치와 타당성 측정 결과는 ADR-020
@@ -200,7 +213,7 @@ bulk(j, d) = c(j, d) >= 30 AND c(j, d) >= 10 * m(j)
 - `tenure_days` = (`closed_on` 또는 기준일) − `opened_on`
 - 같은 `ho_list` 원소를 공유하는 기록끼리는 화면에서 "같은 호수로 신고된 기록"으로 묶어 색을 맞춘다 (연결선 표시)
 - `has_concurrent` = 이력 중 영업 기간이 30일 넘게 겹치는 쌍 존재 → "이 층에는 여러 점포가 함께 있을 수 있어요"
-- `record_suppression`에 있는 기록은 제외
+- `record_suppression`에 있는 기록과 `no_fixed_place = true`인 기록은 제외 (§1.1)
 
 **알림(`notices`) 발생 조건**
 
@@ -214,9 +227,9 @@ bulk(j, d) = c(j, d) >= 30 AND c(j, d) >= 10 * m(j)
 ### 7.2 과거 폐업 횟수와 기준율
 
 **정의 (method_version `2026.10.1`)**
-- 층키 기록 집합 `F(pnu, floor)` — 식품 3종, `floor IS NOT NULL`
+- 층키 기록 집합 `F(pnu, floor)` — 식품 3종, `floor IS NOT NULL`, `no_fixed_place = false` (§1.1)
 - 기록 r의 과거 폐업 횟수: `prior(r) = |{ s ∈ F : s ≠ r, s.status='closed', s.closed_on < r.opened_on }|` (일괄 폐업 기록 포함)
-- 코호트: `opened_on ∈ [2005-01-01, 기준일 − 1095일]`, `pnu`·`floor` 있음, `r.bulk_closure = false`
+- 코호트: `opened_on ∈ [2005-01-01, 기준일 − 1095일]`, `pnu`·`floor` 있음, `r.bulk_closure = false`, `r.biz_category ≠ '편의점'` (§1.1 — 편의점 기록은 `F`에는 남아 다른 기록의 과거 폐업 횟수에는 들어간다. 포함했을 때의 결과는 §7.3 `sensitivity.convenience_store`)
 - 결과: `event(r) = r.status='closed' AND r.closed_on − r.opened_on ≤ 1095일`
 - 버킷: `0, 1, 2, 3, 4+`
 - 범위: 서울 전체(`scope_code='11'`)와 시군구별
@@ -246,7 +259,8 @@ bulk(j, d) = c(j, d) >= 30 AND c(j, d) >= 10 * m(j)
   "by_sigungu": [{"sigungu": "중구", "n": 7369, "or": 1.197, "ci": [1.155, 1.239]}],
   "out_of_time": {"train": "2005-2014", "test": "2015-2020", "auc_base": 0.6088, "auc_with_prior": 0.6108},
   "sensitivity": {"bulk_as_censored": {}, "exclude_stale": {},
-                  "bulk_exclusion": {"none": {}, "surge_rule": {}, "w0_citywide_100": {}}}
+                  "bulk_exclusion": {"none": {}, "surge_rule": {}, "w0_citywide_100": {}},
+                  "convenience_store": {"excluded": {}, "included": {}}}
 }
 ```
 (값은 W0 일반음식점 결과 예시. 실제 값은 식품 3종으로 재계산)

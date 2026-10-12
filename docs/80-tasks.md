@@ -122,9 +122,12 @@
 
 ### T-016 정규화 파이프라인 · 데이터 검증 ⏱5h
 - **할 일**: `license_raw` → `license_record` upsert, 상태 매핑, 날짜·면적·PNU·층·호·좌표·일괄폐업 플래그, `parse_version`. DV1~DV10 실행 → `data_snapshot.validation`, 실패 시 `status='failed'`이고 기존 데이터 유지
-  - 폐업 처리 급증일 탐지 결과의 관할·날짜·건수를 저장한다("폐업 처리 몰린 날" 배지 설명에 쓴다, ADR-020). 저장 위치는 docs/04를 먼저 고치고 마이그레이션으로 만든다
+  - 폐업 처리 급증일 탐지 결과의 관할·날짜·건수를 저장한다("폐업 처리 몰린 날" 배지 설명에 쓴다, ADR-020). 저장 위치는 docs/04 `closure_surge_day`(마이그레이션 `0003_normalize`)
+  - 범위에서 빼는 기록(docs/10 §1.1): 서울 밖 주소 행은 제외, 고정된 자리가 없는 업태는 `no_fixed_place` 표시, 편의점은 그대로 두고 통계에서만 기본 제외(T-019)
+  - `validation.normalize`에 DV 결과와 함께 `non_seoul_excluded`, `no_fixed_place`, `floor_conflict`, `ho_conflict` 건수를 적는다 (docs/50 §2)
 - **수용 기준**
   - [ ] 영업상태 원문 값 전체 목록을 `data/README.md`에 기록, 매핑 누락 0
+  - [ ] 업태구분명 원문 값 전체 목록을 건수와 함께 `data/README.md`에 기록
   - [ ] DV 검사별 실패 유도 픽스처 테스트
   - [ ] 서울 식품 3종 전체 정규화 10분 이내
   - [ ] `GET /api/v1/health`의 `location_snapshot`이 최신 성공 스냅샷 값으로 채워짐 (스냅샷이 없으면 `null`, docs/30 §2)
@@ -155,6 +158,7 @@
   - [ ] `model_card.payload`가 docs/10 §7.3 구조를 만족(Pydantic 검증)
   - [ ] 폐업 처리 급증일 제외 정의 세 가지(제외 없음 / 새 규칙 `bulk_closure` / W0 정의: 일반음식점 서울 전체 하루 100건 이상)로 기준율을 각각 계산해 모형 카드(`sensitivity.bulk_exclusion`)에 싣고, 결론(과거 폐업이 많을수록 3년 내 폐업률이 높다)이 세 정의 모두에서 유지되는지 보여준다 (ADR-020)
   - [ ] 세 정의의 민감도 결과를 보고 화면 기준율 카드의 제외 정의를 확정한다: 결론이 같으면 새 규칙(`bulk_closure`, docs/10 §7.2)을 유지하고, 다르면 가장 보수적인 정의를 쓰고 카드에 주의 문구를 표시한다. 확정 내용은 docs/10 §7.2와 ADR-020에 적는다
+  - [ ] 편의점 포함/제외 민감도: 기본은 제외(docs/10 §7.2). 편의점을 포함했을 때의 기준율을 함께 계산해 모형 카드(`sensitivity.convenience_store`)에 싣는다
   - [ ] 10분 이내
 - **참고**: docs/10 §7
 

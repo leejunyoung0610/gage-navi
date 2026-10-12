@@ -22,11 +22,11 @@
 | 개방자치단체코드 | `jurisdiction_code` | 7자리 (예: 3040000 = 광진구) ✅ |
 | 관리번호 | `mgmt_no` | |
 | 인허가일자 | `opened_on` | `YYYY-MM-DD` ✅ |
-| 영업상태명 | `status_raw` → `status` | `영업/정상`→open, `폐업`→closed, `휴업`→suspended, 그 외→other 🔎(T-016에서 전체 값 목록 확인) |
+| 영업상태명 | `status_raw` → `status` | `영업/정상`→open, `폐업`→closed, `휴업`→suspended. 2026-10 세 파일에는 `영업/정상`·`폐업` 두 값뿐이다 ✅(T-016, 건수는 `data/README.md`). 표에 없는 값이 나오면 `other`로 넘기지 않고 DV5 실패로 멈춘다 — 값을 확인해 이 표에 매핑(필요하면 `other`)을 추가한 뒤 다시 실행 |
 | 폐업일자 | `closed_on` | 폐업인데 비어 있는 행 서울 27건 ✅ → `closed_on=NULL`, 통계 제외 |
 | 소재지면적 | `area_m2` | ㎡ 🔎(단위 표기 없음, 값 분포로 ㎡ 추정 — T-016에서 확인) |
 | 사업장명 | `name` | |
-| 업태구분명 | `biz_category` | 한식, 분식, 호프/통닭, 경양식, 까페 … ✅ |
+| 업태구분명 | `biz_category` | 한식, 분식, 호프/통닭, 경양식, 까페 … ✅ 원문 그대로 저장. 전체 값 목록은 `data/README.md`, 범위에서 빼는 업태는 docs/10 §1.1 |
 | 지번주소 | `jibun_addr` | 서울 100% 존재 ✅. PNU·층 파싱의 1차 소스 |
 | 도로명주소 | `road_addr` | 55% 존재(광진구) ✅. 쉼표 뒤 상세에 층·호가 있음 |
 | 좌표정보(X), 좌표정보(Y) | `geom` | 평면 직각좌표 **EPSG:5174** ✅ (서로 다른 구 20건 지도 대조, ADR-026). `to_wgs84`로 EPSG:4326 변환. 좌표 빈 행 39,971 / 704,141 (2026-10 세 파일) |
@@ -114,7 +114,7 @@ HWP / HWPX / PDF. 변환 방식은 docs/20 §10.2, T-051S 스파이크로 확정
 
 | 작업 | 주기 | 명령 |
 |---|---|---|
-| 인허가 전체 적재 + 정규화 | 월 1회, 🧑 포털에서 세 파일을 내려받은 뒤 (ADR-025) | `jobs.ingest_licenses --mode full --type … --file data/raw/<다운로드일>/…` |
+| 인허가 전체 적재 + 정규화 | 월 1회, 🧑 포털에서 세 파일을 내려받은 뒤 (ADR-025) | `jobs.ingest_licenses --mode full --type … --file data/raw/<다운로드일>/…` (세 번) → `jobs.normalize_licenses` |
 | 층 이력·과거 폐업 횟수 재계산 | 인허가 적재 후 | `jobs.build_history` |
 | 기준율 통계·모형 카드 | 이력 재계산 후 | `jobs.compute_base_rates` |
 | 공고 수집·변경 감지 | 매일 09:00, 18:00 | `jobs.collect_announcements` |
