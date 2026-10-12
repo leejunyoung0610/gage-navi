@@ -21,7 +21,14 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.core.db import get_engine
 from app.location.ingest.license_file import SOURCE_TZ
-from app.location.normalize.stale import SAME_AREA, SAME_HO, StaleResult, detect_stale
+from app.location.normalize.stale import (
+    HO_OPEN_COUNT,
+    SAME_AREA,
+    SAME_HO,
+    SHARED_HO_MIN_OPEN,
+    StaleResult,
+    detect_stale,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_OUT = REPO_ROOT / "reports" / "stale_suspect.md"
@@ -64,6 +71,8 @@ class Summary:
     crowded_floors: int  # 같은 호 근거 기록이 CROWDED_FLOOR건 이상인 층키 수
     crowded_records: int
     top_floor_counts: tuple[int, ...]
+    crowded_floor_hos: tuple[int, ...]  # 몰린 층키마다 표시된 기록들의 서로 다른 호 수
+    ho_open_counts: dict[int, int]  # 같은 호 근거가 된 호의 영업 중 기록 수(자신 포함) → 기록 수
 
     @property
     def same_ho(self) -> int:
@@ -101,6 +110,22 @@ def summarize(records: pd.DataFrame, result: StaleResult) -> Summary:
         crowded_floors=len(crowded),
         crowded_records=int(crowded.sum()),
         top_floor_counts=tuple(int(count) for count in per_floor.head(TOP_FLOORS)),
+        crowded_floor_hos=tuple(
+            int(
+                records.loc[ho & (records["pnu"] == pnu) & (records["floor"] == floor), "ho_list"]
+                .explode()
+                .nunique()
+            )
+            for pnu, floor in crowded.index
+        ),
+        ho_open_counts={
+            int(count): int(n)
+            for count, n in flags.loc[flags[SAME_HO], HO_OPEN_COUNT]
+            .value_counts()
+            .sort_index()
+            .to_dict()
+            .items()
+        },
     )
 
 
@@ -113,8 +138,13 @@ def _percent(part: int, whole: int) -> str:
 
 def render_report(summary: Summary, measured_on: date) -> str:
     result = summary.result
-    ho_lost = result.ho_records_before - summary.same_ho
     area_lost = result.area_records_before - summary.same_area
+    before_shared = summary.same_ho + result.ho_records_shared_excluded
+    ho_lost = result.ho_records_before - before_shared
+    counts = ", ".join(f"{count:,}" for count in summary.top_floor_counts) or "—"
+    crowded_hos = ", ".join(f"{count:,}" for count in summary.crowded_floor_hos) or "—"
+    open_1 = summary.ho_open_counts.get(1, 0)
+    open_2 = summary.ho_open_counts.get(2, 0)
     lines = [
         "# 미갱신 의심 표시 (T-017, docs/10 §6, ADR-023)",
         "",
@@ -150,10 +180,36 @@ def render_report(summary: Summary, measured_on: date) -> str:
         "| 근거 | 쌍 (빼기 전) | 같은 가게로 뺀 쌍 | 기록 (빼기 전) | 기록 (뺀 뒤) "
         "| 표시가 사라진 기록 |",
         "|---|---|---|---|---|---|",
-        f"| 같은 호 | {result.ho_pairs:,} | {result.ho_pairs_same_name:,} "
-        f"| {result.ho_records_before:,} | {summary.same_ho:,} | {ho_lost:,} |",
+        f"| 같은 호 (공유 공간 제외 전) | {result.ho_pairs:,} | {result.ho_pairs_same_name:,} "
+        f"| {result.ho_records_before:,} | {before_shared:,} | {ho_lost:,} |",
         f"| 같은 면적(±1%) | {result.area_pairs:,} | {result.area_pairs_same_name:,} "
         f"| {result.area_records_before:,} | {summary.same_area:,} | {area_lost:,} |",
+        "",
+        "## 공유 공간 추정으로 제외 (같은 호 근거만)",
+        "",
+        f"한 층키에서 같은 호 번호를 가진 영업 중 기록이 {SHARED_HO_MIN_OPEN}건 이상이면 "
+        "여러 사업자가 함께 쓰는 공간으로 보고, 그 호로만 겹치는 쌍은 같은 호 근거로 세지 않는다"
+        "(docs/10 §6). 틀린 배지보다 놓친 배지가 낫다는 기준이다.",
+        "",
+        f"- 공유 공간으로 본 (층키, 호): {result.shared_hos:,}곳",
+        f"- 같은 가게 쌍을 뺀 뒤 같은 호 근거가 있던 기록: {before_shared:,}건",
+        f"- **공유 공간 추정으로 제외: {result.ho_records_shared_excluded:,}건** "
+        f"({_percent(result.ho_records_shared_excluded, before_shared)})",
+        f"- 남은 같은 호 근거 기록: {summary.same_ho:,}건",
+        f"- 남은 기록 중 같은 호 근거 기록이 {CROWDED_FLOOR}건 이상 몰린 층키: "
+        f"{summary.crowded_floors:,}곳 ({summary.crowded_records:,}건). "
+        f"층키별 기록 수 상위 {TOP_FLOORS}: {counts}",
+        f"- 그 층키들에서 표시된 기록이 걸친 서로 다른 호 수(층키별): {crowded_hos} "
+        "— 한 호에 몰린 것이 아니라 여러 호에 흩어져 있으면 호 수가 기록 수와 비슷하다",
+        "",
+        "남은 기록에서 근거가 된 호의 영업 중 기록 수(자신 포함):",
+        "",
+        "| 그 호의 영업 중 기록 | 기록 | 비율 | 뜻 |",
+        "|---|---|---|---|",
+        f"| 1건 | {open_1:,} | {_percent(open_1, summary.same_ho)} "
+        "| 나중에 연 가게는 이미 폐업했고 이 기록만 영업 중 |",
+        f"| 정확히 2건 | {open_2:,} | {_percent(open_2, summary.same_ho)} "
+        "| 이 기록과 나중에 연 가게가 둘 다 영업 중 |",
         "",
         "## 인허가 종류별",
         "",
@@ -163,19 +219,6 @@ def render_report(summary: Summary, measured_on: date) -> str:
     lines += [
         f"| {LICENSE_LABELS[kind]} | {opened:,} | {ho:,} | {area:,} |"
         for kind, (opened, ho, area) in summary.by_license.items()
-    ]
-    counts = ", ".join(f"{count:,}" for count in summary.top_floor_counts) or "—"
-    lines += [
-        "",
-        "## 한 층에 몰린 표시 (알려진 한계)",
-        "",
-        "한 호를 여러 사업자가 나눠 쓰는 곳(공유주방 등)은 서로 다른 가게가 동시에 영업하는데도 "
-        "같은 호 근거에 잡힌다(docs/10 §6).",
-        "",
-        f"- 같은 호 근거 기록이 {CROWDED_FLOOR}건 이상인 층키: {summary.crowded_floors:,}곳, "
-        f"기록 {summary.crowded_records:,}건 (같은 호 근거의 "
-        f"{_percent(summary.crowded_records, summary.same_ho)})",
-        f"- 층키별 같은 호 근거 기록 수 상위 {TOP_FLOORS}: {counts}",
     ]
     return "\n".join(lines) + "\n"
 
@@ -239,6 +282,7 @@ def main(argv: list[str] | None = None) -> int:
         "same_ho": summary.same_ho,
         "same_area": summary.same_area,
         "area_only": summary.area_only,
+        "shared_space_excluded": summary.result.ho_records_shared_excluded,
         "ho_pairs_same_name": summary.result.ho_pairs_same_name,
         "area_pairs_same_name": summary.result.area_pairs_same_name,
         "out": str(args.out),
