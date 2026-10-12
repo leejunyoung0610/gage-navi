@@ -1,6 +1,6 @@
 # 04. 데이터 모델 (PostgreSQL 16 + PostGIS)
 
-> 마이그레이션은 Alembic으로만. §2 = `0001_location`(T-003) + `0003_normalize`(T-016: `license_record.no_fixed_place`, `closure_surge_day`), §3 = `0002_rules`(T-005). 아래 DDL은 기준 명세이며, 구현 시 이름·타입·제약을 그대로 따른다. 변경은 이 문서를 먼저 고친다.
+> 마이그레이션은 Alembic으로만. §2 = `0001_location`(T-003) + `0003_normalize`(T-016: `license_record.no_fixed_place`, `closure_surge_day`) + `0004_stale_area`(T-017: `license_record.stale_area_match`), §3 = `0002_rules`(T-005). 아래 DDL은 기준 명세이며, 구현 시 이름·타입·제약을 그대로 따른다. 변경은 이 문서를 먼저 고친다.
 
 ## 1. 공통 규칙
 
@@ -72,7 +72,8 @@ CREATE TABLE license_record (
   ho_list           TEXT[] NOT NULL DEFAULT '{}',
   geom              GEOMETRY(Point, 4326),
   bulk_closure      BOOLEAN NOT NULL DEFAULT false,   -- ADR-020. 그날의 관할 이름·건수는 closure_surge_day
-  stale_suspect     BOOLEAN NOT NULL DEFAULT false,   -- ADR-023
+  stale_suspect     BOOLEAN NOT NULL DEFAULT false,   -- ADR-023. 근거: 같은 호 (docs/10 §6). 화면 배지에 쓴다
+  stale_area_match  BOOLEAN NOT NULL DEFAULT false,   -- ADR-023. 근거: 같은 면적 ±1%. 통계 민감도 분석에만 쓴다
   no_fixed_place    BOOLEAN NOT NULL DEFAULT false,   -- 고정된 자리가 없는 업태(docs/10 §1.1). 자리 이력·통계에서 제외
   source_updated_at TIMESTAMPTZ,
   last_snapshot_id  BIGINT REFERENCES data_snapshot(id),
