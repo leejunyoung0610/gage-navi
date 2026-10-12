@@ -62,7 +62,7 @@
 - **할 일**:
   - 🧑 휴게음식점·제과점영업 데이터셋 ID·파일명·이용허락범위를 찾아 `data/README.md`에 기록(다운로드 날짜 포함)
   - `jobs.ingest_licenses --mode full --type {general_restaurant|rest_restaurant|bakery} --file PATH`: 인코딩 자동 판별(CP949 우선, 실패 시 UTF-8), `csv` 모듈로 파싱(**주소에 줄바꿈 포함 행 존재**), `data_snapshot` + `license_raw`(COPY) 적재. **파일의 모든 행을 적재**하고, 주소가 서울 밖인 행(`지번주소`·`도로명주소` 둘 다 `서울특별시`로 시작하지 않음)은 빼지 않고 수만 기록한다 — 제외는 정규화(T-016)에서
-  - D2 API 조사: 변경분 조회 가능 여부·필드명·한도를 `data/README.md`에 기록. 가능하면 `--mode incremental` 구현, 불가하면 월 1회 전체 적재로 대체하고 ADR 추가
+  - 갱신 방식: **월 1회 전체 적재** (ADR-025). 🧑 매월 포털에서 세 파일을 내려받아 `data/raw/<다운로드일>/`에 넣는다. `--mode incremental`과 D2 조회 API는 만들지 않는다(조회 API는 T-050 때 다시 볼 수 있다)
 - **수용 기준**
   - [ ] 2026-10-08 서울 일반음식점 파일 적재 행 수 = 539,589
   - [ ] 줄바꿈 포함 주소 행 픽스처 파싱 테스트
@@ -147,7 +147,7 @@
 - **참고**: docs/10 §7.1·7.2
 
 ### T-019 기준율 · 모형 카드 ⏱5h
-- **할 일**: `jobs.compute_base_rates --method-version {2026.10.1|w0}`. Wilson CI, 서울·시군구 범위, 모형 카드(로지스틱+층키 클러스터 SE, 다른 층 통제, 시군구별, 시간 외 AUC, 민감도: 일괄폐업 중도절단·미갱신 제외)
+- **할 일**: `jobs.compute_base_rates --method-version {2026.10.1|w0}`. **식품 3종 합산 통계의 기준일 = 세 스냅샷 `source_updated_max` 중 가장 이른 날짜.** Wilson CI, 서울·시군구 범위, 모형 카드(로지스틱+층키 클러스터 SE, 다른 층 통제, 시군구별, 시간 외 AUC, 민감도: 일괄폐업 중도절단·미갱신 제외)
 - **수용 기준**
   - [ ] Wilson CI를 알려진 값(n=100, 사건 50 → 0.404~0.596)으로 검증
   - [ ] `model_card.payload`가 docs/10 §7.3 구조를 만족(Pydantic 검증)

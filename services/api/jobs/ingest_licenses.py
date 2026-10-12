@@ -2,8 +2,7 @@
 
     python -m jobs.ingest_licenses --mode full --type general_restaurant --file PATH
 
-`--mode incremental`(D2 조회 API)은 변경분 조회 가능 여부를 확인하지 못해 아직 없다
-(data/README.md "인허가 조회 API").
+갱신은 월 1회 전체 적재다 (ADR-025). 증분 수집(`--mode incremental`)은 만들지 않는다.
 """
 
 import argparse
@@ -25,9 +24,9 @@ from app.location.ingest.license_file import (
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="jobs.ingest_licenses", description="인허가 파일 적재")
-    parser.add_argument("--mode", choices=("full", "incremental"), required=True)
+    parser.add_argument("--mode", choices=("full",), required=True)
     parser.add_argument("--type", dest="license_type", choices=LICENSE_TYPES, required=True)
-    parser.add_argument("--file", type=Path, help="원천 CSV 경로 (--mode full에 필수)")
+    parser.add_argument("--file", type=Path, required=True, help="원천 CSV 경로")
     return parser
 
 
@@ -58,12 +57,6 @@ async def run(license_type: str, path: Path) -> IngestResult:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    if args.mode == "incremental":
-        print("--mode incremental은 아직 없습니다 (D2 API 변경분 조회 미확인)", file=sys.stderr)
-        return 2
-    if args.file is None:
-        print("--mode full에는 --file이 필요합니다", file=sys.stderr)
-        return 2
     started = time.perf_counter()
     try:
         result = asyncio.run(run(args.license_type, args.file))
