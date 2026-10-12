@@ -123,6 +123,45 @@ def test_same_business_pairs_are_excluded() -> None:
     assert result.candidates == 8 and result.later_pairs == 5
 
 
+def test_shared_space_ho_is_not_a_same_ho_basis() -> None:
+    rows = [
+        # 공유주방: 같은 7호에 영업 중 기록이 3건 → 그 호로는 근거를 세우지 않는다
+        record(1, "가상키친 1호점", "2020-01-01", ho=("7",), pnu="P1"),
+        record(2, "가상키친 2호점", "2020-01-02", ho=("7",), pnu="P1"),
+        record(3, "가상키친 3호점", "2020-01-03", ho=("7",), pnu="P1"),
+        # 영업 중 2건 + 폐업 1건: 영업 중은 2건뿐이라 공유 공간이 아니다
+        record(4, "가상분식", "2010-01-01", ho=("8",), pnu="P2"),
+        record(5, "가상카페", "2015-01-01", ho=("8",), pnu="P2"),
+        record(6, "가상국밥", "2012-01-01", ho=("8",), pnu="P2", status="closed"),
+        # 공유 호(9)와 공유가 아닌 호(10)로 함께 겹치면 10호 때문에 근거가 선다
+        record(7, "가상김밥", "2010-01-01", ho=("9", "10"), pnu="P3"),
+        record(8, "가상우동", "2015-01-01", ho=("9", "10"), pnu="P3", status="closed"),
+        record(9, "가상족발", "2016-01-01", ho=("9",), pnu="P3"),
+        record(10, "가상보쌈", "2017-01-01", ho=("9",), pnu="P3"),
+        # 같은 호 번호라도 층키가 다르면 따로 센다
+        record(11, "가상냉면", "2010-01-01", ho=("7",), pnu="P4"),
+        record(12, "가상만두", "2015-01-01", ho=("7",), pnu="P4"),
+        # 공유 공간이어도 같은 면적 근거는 그대로 선다
+        record(13, "가상주방 1호점", "2020-01-01", ho=("5",), area="20.00", pnu="P5"),
+        record(14, "가상주방 2호점", "2020-01-02", ho=("5",), area="20.00", pnu="P5"),
+        record(15, "가상주방 3호점", "2020-01-03", ho=("5",), area="33.00", pnu="P5"),
+    ]
+    result = detect_stale(pd.DataFrame(rows))
+    stored = {
+        int(row["id"]): (bool(row["same_ho"]), bool(row["same_area"]), int(row["ho_open_count"]))
+        for row in result.flags.to_dict("records")
+    }
+    assert stored == {
+        4: (True, False, 2),  # 8호: 자신과 뒤에 연 가게가 둘 다 영업 중
+        7: (True, False, 1),  # 10호: 뒤에 연 가게는 폐업, 자신만 영업 중
+        11: (True, False, 2),
+        13: (False, True, 0),  # 5호는 공유 공간이라 같은 호 근거는 없고 면적 근거만
+    }
+    # 공유 공간 때문에 같은 호 근거가 빠진 기록: 1·2(7호), 9(9호), 13·14(5호)
+    assert result.ho_records_shared_excluded == 5
+    assert result.shared_hos == 3  # (P1, 7), (P3, 9), (P5, 5)
+
+
 @pytest.mark.parametrize(
     ("a", "b", "expected"),
     [

@@ -94,8 +94,28 @@ def test_flags_are_written_by_basis(seeded: str) -> None:
     report = render_report(summary, date(2026, 10, 13))
     assert "| 같은 호 | `stale_suspect` | **1** | 16.67% | 화면 배지, 민감도 분석 |" in report
     assert "| 면적만 같음 (화면에 내지 않는다) | 1 |" in report
-    assert "| 같은 호 | 2 | 1 | 2 | 1 | 1 |" in report
+    assert "| 같은 호 (공유 공간 제외 전) | 2 | 1 | 2 | 1 | 1 |" in report
+    assert "- **공유 공간 추정으로 제외: 0건** (0.00%)" in report
+    assert "| 정확히 2건 | 1 | 100.00% |" in report
     assert "가상" not in report  # 업소 이름은 리포트에 넣지 않는다
+
+
+def test_shared_space_is_excluded_and_reported(seeded: str) -> None:
+    # 1층 101호에 영업 중 기록이 하나 더 생기면(3건) 공유 공간으로 보고 A1의 표시를 세우지 않는다
+    execute(
+        seeded,
+        INSERT.format(
+            kind="rest_restaurant", mgmt="A3", name="가상우동", status="open", opened="2016-01-01",
+            area="NULL", pnu=PNU, floor="1", ho="101", mobile="false",
+        ),
+    )  # fmt: skip
+    summary: Summary = with_engine(seeded, flag)
+    stored = flags(seeded)
+    assert stored["A1"] == (False, False) and stored["A2"] == (False, False)
+    assert (summary.same_ho, summary.result.ho_records_shared_excluded) == (0, 2)
+    assert "- **공유 공간 추정으로 제외: 2건** (100.00%)" in render_report(
+        summary, date(2026, 10, 13)
+    )
 
 
 def test_rerun_is_the_same_and_stale_flags_are_cleared(seeded: str) -> None:
