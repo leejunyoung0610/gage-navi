@@ -119,7 +119,16 @@
 위 항목 + `rule_summary`(조건 목록을 템플릿 문장으로) + `evidence`(키별 인용문·위치).
 
 ### `GET /api/v1/evidence/{program_id}/{rule_version}/{ev_key}`
-`{"quote": "…", "loc": "p3:l12-14", "document": {"file_name": "….hwpx"}, "announcement": {"title": "…", "url": "https://…"}, "checked_on": "2026-11-20"}`
+`{"quote": "…", "loc": "p3:l12-14", "document": {"file_name": "….pdf"}, "announcement": {"title": "…", "url": "https://…"}, "checked_on": "2026-11-20"}`
+
+`loc` 형식 (문서 형식별, ADR-024):
+
+| 형식 | `loc` | 예 | 뜻 |
+|---|---|---|---|
+| PDF | `p{쪽}:l{줄}` | `p3:l12-14` | 3쪽의 12~14번째 줄. 쪽은 1부터 |
+| HWP | `s{섹션}:l{줄}` | `s0:l120-123` | 섹션 0의 120~123번째 줄. HWP는 쪽 정보가 없어 본문 섹션(`BodyText/Section{n}`, 0부터)을 쓴다 |
+
+줄 번호는 그 쪽·섹션 안에서 1부터 세고, 한 줄이면 `l12`, 범위면 `l12-14`.
 
 ### `GET /api/v1/funding/credit-bands`
 `{"data": {"bands": [{"id": "cs_0_799", "lo": 0, "hi": 799, "label": "799점 이하"}, {"id": "cs_800_899", …}], "rule_versions": {…}}}`
