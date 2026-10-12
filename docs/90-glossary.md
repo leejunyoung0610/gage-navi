@@ -11,7 +11,7 @@
 | 같은 호수로 신고된 기록 | `ho_groups` | `ho_list`를 공유하는 기록 묶음 |
 | 업소 기록 | `license_record` | 인허가 1건(식품 3종 중 하나) |
 | 식품 3종 | `food3` | 일반음식점 `general_restaurant`, 휴게음식점 `rest_restaurant`, 제과점영업 `bakery` |
-| 행정 일괄 정리 | `bulk_closure` | 실제 폐업 시점이 아닌 행정 처리로 보이는 대량 폐업일의 기록 (ADR-020) |
+| 폐업 처리 몰린 날 (문서에서는 폐업 처리 급증일) | `bulk_closure` | 한 관할에서 하루에 평소보다 훨씬 많은 폐업이 처리된 날의 기록(docs/10 §5). "행정 일괄 정리"라는 해석은 검증하지 못해 쓰지 않는다 (ADR-020) |
 | 폐업 신고 지연 의심 | `stale_suspect` | 영업 중으로 남았지만 같은 자리에 이후 다른 업소가 개업한 기록 (ADR-023) |
 | 과거 폐업 횟수 | `prior_closures_floor` | 층키에서 해당 기록 개업 전에 폐업한 기록 수 |
 | 3년 내 폐업 | `event`, `closed_within_3y` | 개업 후 1,095일 이내 폐업 |
