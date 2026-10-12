@@ -1,0 +1,85 @@
+# docs/50-quality.md §8. 각 작업은 Makefile 타깃을 그대로 실행한다 (로컬 `make check`와 같은 검사).
+# e2e·e2e-full·mutation·security 작업은 해당 티켓에서 추가한다.
+name: ci
+
+on:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  api-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.0 # 이 액션은 v10 같은 메이저 태그가 없다
+        with:
+          working-directory: services/api
+          enable-cache: true
+      - name: 의존성 설치
+        run: uv sync --locked
+        working-directory: services/api
+      - name: ruff · mypy · import-linter · pytest(unit·property·scenario·golden)
+        run: make check-api
+
+  api-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      db:
+        image: postgis/postgis:16-3.4 # docker-compose.yml의 db와 같은 이미지
+        env:
+          POSTGRES_DB: gagenavi
+          POSTGRES_USER: gagenavi
+          POSTGRES_PASSWORD: ci-only # 작업이 끝나면 사라지는 컨테이너 전용 값 (비밀 아님)
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gagenavi -d gagenavi"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      APP_ENV: ci
+      DATABASE_URL: postgresql+asyncpg://gagenavi:ci-only@localhost:5432/gagenavi
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.0 # 이 액션은 v10 같은 메이저 태그가 없다
+        with:
+          working-directory: services/api
+          enable-cache: true
+      - name: 의존성 설치
+        run: uv sync --locked
+        working-directory: services/api
+      - name: 마이그레이션 적용
+        run: uv run alembic upgrade head
+        working-directory: services/api
+      - name: 통합 테스트
+        run: uv run pytest tests/integration
+        working-directory: services/api
+
+  web-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6 # 버전은 package.json의 packageManager를 따른다
+        with:
+          package_json_file: apps/web/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+      - name: 의존성 설치
+        run: pnpm install --frozen-lockfile
+        working-directory: apps/web
+      # gen:api 차이 검사는 T-031, check_copy는 T-037에서 추가
+      - name: eslint · tsc · prettier · vitest
+        run: make check-web
