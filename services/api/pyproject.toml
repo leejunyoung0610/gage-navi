@@ -1,0 +1,96 @@
+[project]
+name = "gage-navi-api"
+version = "0.1.0"
+description = "가게내비 API · 배치"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "alembic>=1.20.0",
+    "asyncpg>=0.32.0",
+    "fastapi>=0.143.0",
+    "numpy>=2.5.4",
+    "pandas>=3.0.6",
+    "pydantic>=2.14.1",
+    "pyproj>=3.8.0",
+    "sqlalchemy[asyncio]>=2.1.4",
+    "statsmodels>=0.15.0",
+    "uvicorn>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "hypothesis>=6.169.0",
+    "import-linter>=2.15",
+    "mutmut>=3.8.0",
+    "mypy>=2.4.0",
+    "pre-commit>=4.6.2",
+    "pytest>=9.1.1",
+    "ruff>=0.17.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["app", "jobs"]
+plugins = ["pydantic.mypy"]
+warn_unused_configs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+check_untyped_defs = true
+
+# strict 대상 (docs/01 §2). `strict`는 모듈별로 켤 수 없어 플래그를 나열한다.
+[[tool.mypy.overrides]]
+module = ["app.rules", "app.rules.*", "app.location", "app.location.*"]
+disallow_any_generics = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_decorators = true
+warn_return_any = true
+no_implicit_reexport = true
+strict_equality = true
+extra_checks = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.importlinter]
+root_packages = ["app", "jobs"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "location은 rules를 import하지 않는다"
+type = "forbidden"
+source_modules = ["app.location"]
+forbidden_modules = ["app.rules"]
+
+[[tool.importlinter.contracts]]
+name = "rules는 location을 import하지 않는다"
+type = "forbidden"
+source_modules = ["app.rules"]
+forbidden_modules = ["app.location"]
+
+[[tool.importlinter.contracts]]
+name = "anthropic은 app.rules.extraction에서만 import한다 (ADR-001)"
+type = "forbidden"
+source_modules = ["app", "jobs"]
+forbidden_modules = ["anthropic"]
+allow_indirect_imports = true
+ignore_imports = [
+    "app.rules.extraction -> anthropic",
+    "app.rules.extraction.** -> anthropic",
+]
+unmatched_ignore_imports_alerting = "none"
+
+[[tool.importlinter.contracts]]
+name = "rules.engine은 순수 함수만 (sqlalchemy·fastapi·httpx 금지)"
+type = "forbidden"
+source_modules = ["app.rules.engine"]
+forbidden_modules = ["sqlalchemy", "fastapi", "httpx"]

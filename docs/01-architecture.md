@@ -79,7 +79,7 @@ gage-navi/
 ├── eval/labels/{dev,test}/        # 규칙 추출 정답 라벨 JSON (커밋 대상)
 ├── docker-compose.yml
 ├── .env.example
-├── Makefile                       # make setup | check | test | dev | e2e
+├── Makefile                       # make setup | check | test | dev | e2e | gen-api
 ├── services/api/
 │   ├── pyproject.toml
 │   ├── alembic/

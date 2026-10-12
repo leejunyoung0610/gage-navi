@@ -16,6 +16,7 @@ __pycache__/
 *.pyc
 .venv/
 .mypy_cache/
+.import_linter_cache/
 .ruff_cache/
 .pytest_cache/
 .hypothesis/
@@ -26,6 +27,8 @@ htmlcov/
 # Node / Next
 node_modules/
 .next/
+next-env.d.ts
+*.tsbuildinfo
 out/
 apps/web/test-results/
 apps/web/playwright-report/
