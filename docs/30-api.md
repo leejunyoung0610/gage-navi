@@ -66,10 +66,18 @@
   "location": {"lat": 37.54, "lng": 127.07},
   "floors": [{"floor": "B1", "record_count": 3, "open_now_count": 1},
              {"floor": "1",  "record_count": 7, "open_now_count": 1}],
-  "records_without_floor": 4
+  "records_without_floor": 4,
+  "history_without_floor": [{
+    "record_id": 880, "name": "○○식당", "license_type": "general_restaurant", "biz_category": "한식",
+    "opened_on": "1998-05-11", "closed_on": "2003-02-28", "status": "closed", "tenure_days": 1754,
+    "ho_list": [], "bulk_closure": false
+  }]
 }}
 ```
-`records_without_floor`: 층 정보가 없어 층 이력에 포함되지 않은 기록 수(화면 고지용).
+- `records_without_floor`: 층 정보가 없어 층 이력에 포함되지 않은 기록 수
+- `history_without_floor`: 그 기록들의 목록(T-018에서 결정, 2026-10-13). `opened_on` 오름차순, 항목은 층 이력의 `history`와 같되 `stale_suspect`는 없다(층키가 있어야 판정한다). 숨김 기록(`record_suppression`)과 `no_fixed_place` 기록은 뺀다. 기준율(`base_rate`)·`notices`는 주지 않는다. `len(history_without_floor) = records_without_floor`
+  - 한 필지의 층 미상 기록은 99번째 백분위 16건, 최대 617건이다(2026-10 데이터). 응답 크기 제한이 필요한지는 T-022에서 정한다
+- `floors`가 비어 있고 `records_without_floor > 0`인 필지도 정상 응답이다(층 정보가 하나도 없는 필지)
 
 ### `GET /api/v1/places/{pnu}/floors/{floor}`
 ```json
