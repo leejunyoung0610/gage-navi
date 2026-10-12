@@ -49,7 +49,7 @@
 | 패키지 관리 | uv | 최신 안정 | 빠른 잠금·재현 |
 | 데이터 처리 | pandas, numpy, pyproj, statsmodels | — | W0 분석 코드 이식 |
 | 최적화 | 자체 DFS(분기 한정) / 확장 시 OR-Tools CP-SAT | — | MVP 후보 수가 작음 (docs/20 §7) |
-| 문서 변환 | HWPX: XML 직접 파싱, HWP: pyhwp(hwp5txt), PDF: pdfplumber | — | T-051 스파이크로 확정 |
+| 문서 변환 | HWP: olefile로 레코드 직접 파싱, PDF: pdfplumber(표는 셀 단위), HWPX: 판정 보류(수동 텍스트) | — | T-051S 스파이크로 확정 (ADR-024) |
 | LLM | Anthropic Claude API, tool use로 JSON 스키마 강제 | — | 추출 전용 |
 | DB | PostgreSQL + PostGIS | 16 / 3.4 | jsonb(규칙·근거), 공간 조회 |
 | 프론트 | Next.js(App Router), React, TypeScript strict | 15 / 19 | 자리 페이지 서버 렌더링·검색 색인 |
