@@ -176,3 +176,4 @@
 | 2026-10-12 | pre-commit (dev) | 커밋 전 ruff·prettier 실행 (T-001). 훅은 `repo: local`로 잠금 파일의 도구 버전을 사용 | husky + lint-staged(Node 전용), 훅 없음 |
 | 2026-10-12 | httpx2 (dev) | FastAPI `TestClient`가 요구 (T-002). Starlette가 `httpx` 대신 권장 | httpx(Starlette에서 사용 중단 경고), ASGI 직접 호출 |
 | 2026-10-12 | eslint-config-prettier (dev) | ESLint 포맷 규칙과 Prettier 충돌 제거 | 규칙 수동 비활성화 |
+| 2026-10-13 | pandas-stubs (dev) | `app/location`은 mypy strict인데 pandas에 타입 정보가 없어 `import pandas`가 오류가 된다 (T-015 일괄 폐업일 탐지가 첫 사용) | pandas만 `ignore_missing_imports`(pandas 호출이 전부 `Any`가 돼 strict의 의미가 없어진다) |
