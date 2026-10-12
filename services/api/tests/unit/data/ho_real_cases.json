@@ -1,0 +1,153 @@
+{
+  "seed": 20261013,
+  "files": [
+    "식품_일반음식점_서울특별시.csv",
+    "식품_제과점영업_서울특별시.csv",
+    "식품_휴게음식점_서울특별시.csv"
+  ],
+  "population": 188991,
+  "ho_candidates": 111866,
+  "tricky_candidates": 34116,
+  "cases": [
+    {
+      "no": 1,
+      "stratum": "random",
+      "tail": "역삼힐즈",
+      "road_detail": "102동 지상1층 101호 (역삼동, 역삼힐즈)",
+      "expected": null
+    },
+    {
+      "no": 2,
+      "stratum": "tricky",
+      "tail": "동일하이빌 1동 B11호",
+      "road_detail": "",
+      "expected": null
+    },
+    {
+      "no": 3,
+      "stratum": "tricky",
+      "tail": "DMC 래미안 e편한세상 1단지-상가3동 3-01호",
+      "road_detail": "1단지-상가3동 1층 3-01호 (북가좌동, DMC 래미안 e편한세상)",
+      "expected": null
+    },
+    {
+      "no": 4,
+      "stratum": "tricky",
+      "tail": "마곡센트럴대방디엠시티오피스텔",
+      "road_detail": "마곡센트럴대방디엠시티오피스텔 1층 122-2호 (마곡동)",
+      "expected": null
+    },
+    {
+      "no": 5,
+      "stratum": "random",
+      "tail": "쌍용플래티넘밸류 지하1층 105호",
+      "road_detail": "",
+      "expected": null
+    },
+    {
+      "no": 6,
+      "stratum": "random",
+      "tail": "명동아르누보센텀",
+      "road_detail": "명동아르누보센텀 3층 317,318호 (을지로2가)",
+      "expected": null
+    },
+    {
+      "no": 7,
+      "stratum": "tricky",
+      "tail": "지하29,30 호동",
+      "road_detail": "",
+      "expected": null
+    },
+    {
+      "no": 8,
+      "stratum": "tricky",
+      "tail": "",
+      "road_detail": "지1층 B132-A호 (상암동)",
+      "expected": null
+    },
+    {
+      "no": 9,
+      "stratum": "tricky",
+      "tail": "",
+      "road_detail": "지하1층 b101호 10호 (역삼동)",
+      "expected": null
+    },
+    {
+      "no": 10,
+      "stratum": "random",
+      "tail": "삼성쉐르빌 지상1층 101호",
+      "road_detail": "지상1층 101호 (목동, 삼성쉐르빌)",
+      "expected": null
+    },
+    {
+      "no": 11,
+      "stratum": "random",
+      "tail": "대우디오슈페리움 C동 104호",
+      "road_detail": "",
+      "expected": null
+    },
+    {
+      "no": 12,
+      "stratum": "tricky",
+      "tail": "롯데월드",
+      "road_detail": "롯데월드 쇼핑몰 지하1층 20.21호 (잠실동)",
+      "expected": null
+    },
+    {
+      "no": 13,
+      "stratum": "tricky",
+      "tail": "",
+      "road_detail": "1층 112,113,114호 (미아동)",
+      "expected": null
+    },
+    {
+      "no": 14,
+      "stratum": "random",
+      "tail": "올림픽프라자",
+      "road_detail": "올림픽프라자 상가 1층 206호 (방이동)",
+      "expected": null
+    },
+    {
+      "no": 15,
+      "stratum": "random",
+      "tail": "2층 223호",
+      "road_detail": "2층 223호 (등촌동)",
+      "expected": null
+    },
+    {
+      "no": 16,
+      "stratum": "random",
+      "tail": "",
+      "road_detail": "지상1층 113호 (역삼동)",
+      "expected": null
+    },
+    {
+      "no": 17,
+      "stratum": "tricky",
+      "tail": "대륭포스트타워6차",
+      "road_detail": "대륭포스트타워6차 107-2호 (가산동)",
+      "expected": null
+    },
+    {
+      "no": 18,
+      "stratum": "random",
+      "tail": "봄작시티 24",
+      "road_detail": "104호 (상봉동, 봄작시티 24)",
+      "expected": null
+    },
+    {
+      "no": 19,
+      "stratum": "random",
+      "tail": "주공아파트 상가동 116호",
+      "road_detail": "",
+      "expected": null
+    },
+    {
+      "no": 20,
+      "stratum": "tricky",
+      "tail": "1층 105호,105-1호",
+      "road_detail": "1층 105호,105-1호 (등촌동, 3동)",
+      "expected": null
+    }
+  ]
+}
