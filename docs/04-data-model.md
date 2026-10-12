@@ -203,7 +203,7 @@ CREATE TABLE document (
   storage_path   TEXT NOT NULL,
   file_sha256    TEXT NOT NULL,
   text           TEXT,                     -- 변환 결과
-  line_index     JSONB,                    -- [{line_no, page, start_char, end_char}]
+  line_index     JSONB,                    -- [{line_no, page, section, start_char, end_char}] PDF는 page(1부터), HWP는 section(0부터). 해당 없는 쪽은 null. line_no는 그 쪽·섹션 안에서 1부터
   converter      TEXT,                     -- 'hwpx-xml@1' 등
   converted_at   TIMESTAMPTZ,
   convert_status TEXT NOT NULL DEFAULT 'pending' CHECK (convert_status IN ('pending','ok','failed','manual'))
@@ -267,7 +267,7 @@ CREATE TABLE evidence (
   ev_key      TEXT NOT NULL,              -- 'E1'
   document_id BIGINT NOT NULL REFERENCES document(id),
   quote       TEXT NOT NULL CHECK (char_length(quote) <= 500),
-  loc         TEXT NOT NULL,              -- 'p3:l12-14'
+  loc         TEXT NOT NULL,              -- PDF 'p3:l12-14', HWP 's0:l120-123' (형식: docs/30 §2 evidence)
   similarity  NUMERIC(4,3) NOT NULL CHECK (similarity BETWEEN 0 AND 1),  -- 원문 대조 점수 0~1 (docs/20 §10.4)
   UNIQUE (rule_id, ev_key)
 );
