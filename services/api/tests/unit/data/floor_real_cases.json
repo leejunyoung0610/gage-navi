@@ -1,0 +1,294 @@
+{
+  "seed": 20261012,
+  "files": [
+    "식품_일반음식점_서울특별시.csv",
+    "식품_제과점영업_서울특별시.csv",
+    "식품_휴게음식점_서울특별시.csv"
+  ],
+  "population": 188991,
+  "tricky_candidates": 133168,
+  "labeled_by": "사용자(파서 결과 비공개 상태)",
+  "labeled_on": "2026-10-12",
+  "cases": [
+    {
+      "no": 1,
+      "stratum": "tricky",
+      "tail": ",102,103",
+      "road_detail": "",
+      "expected": null
+    },
+    {
+      "no": 2,
+      "stratum": "random",
+      "tail": "이너매스 마곡 1층 113호",
+      "road_detail": "이너매스 마곡 1층 113호 (마곡동)",
+      "expected": "1"
+    },
+    {
+      "no": 3,
+      "stratum": "tricky",
+      "tail": "은평헤스티아 1층 103호",
+      "road_detail": "1층 103호 (진관동, 은평헤스티아)",
+      "expected": "1"
+    },
+    {
+      "no": 4,
+      "stratum": "random",
+      "tail": "지상1층 8호",
+      "road_detail": "지상1층 8호)",
+      "expected": "1"
+    },
+    {
+      "no": 5,
+      "stratum": "random",
+      "tail": "은마아파트",
+      "road_detail": "에이블럭 지하1층 40호 (대치동, 은마아파트)",
+      "expected": "B1"
+    },
+    {
+      "no": 6,
+      "stratum": "random",
+      "tail": "",
+      "road_detail": "지1층 1호 (상수동)",
+      "expected": "B1"
+    },
+    {
+      "no": 7,
+      "stratum": "tricky",
+      "tail": "101호",
+      "road_detail": "1층 (천호동)",
+      "expected": "1"
+    },
+    {
+      "no": 8,
+      "stratum": "tricky",
+      "tail": "",
+      "road_detail": "3층 301호 (합정동)",
+      "expected": "3"
+    },
+    {
+      "no": 9,
+      "stratum": "random",
+      "tail": "원그로브",
+      "road_detail": "원그로브쇼핑몰 D동 1층 W104호 (마곡동)",
+      "expected": "1"
+    },
+    {
+      "no": 10,
+      "stratum": "random",
+      "tail": "이세빌딩",
+      "road_detail": "이세빌딩 지상1층 (논현동)",
+      "expected": "1"
+    },
+    {
+      "no": 11,
+      "stratum": "tricky",
+      "tail": "A동 101호(지상1층)",
+      "road_detail": "A동 101호(지상1층))",
+      "expected": "1"
+    },
+    {
+      "no": 12,
+      "stratum": "tricky",
+      "tail": "지하1층,1층",
+      "road_detail": "지하1,1층 (방배동)",
+      "expected": "B1"
+    },
+    {
+      "no": 13,
+      "stratum": "tricky",
+      "tail": "",
+      "road_detail": "104호 (가락동)",
+      "expected": null
+    },
+    {
+      "no": 14,
+      "stratum": "random",
+      "tail": "삼보빌딩",
+      "road_detail": "삼보빌딩 6층 (세종로)",
+      "expected": "6"
+    },
+    {
+      "no": 15,
+      "stratum": "tricky",
+      "tail": "(지상1층) 101호",
+      "road_detail": "107-5 지상1층 101호)",
+      "expected": "1"
+    },
+    {
+      "no": 16,
+      "stratum": "random",
+      "tail": "gs강서타워 5층",
+      "road_detail": "gs강서타워 5층)",
+      "expected": "5"
+    },
+    {
+      "no": 17,
+      "stratum": "random",
+      "tail": "",
+      "road_detail": "4단지 상가동 2층 202호 (중계동)",
+      "expected": "2"
+    },
+    {
+      "no": 18,
+      "stratum": "random",
+      "tail": "",
+      "road_detail": "1,2층 (암사동)",
+      "expected": "1"
+    },
+    {
+      "no": 19,
+      "stratum": "tricky",
+      "tail": "캐럴라인타워",
+      "road_detail": "캐럴라인타워 1동 103호 (신사동)",
+      "expected": null
+    },
+    {
+      "no": 20,
+      "stratum": "random",
+      "tail": "외1필지 지하1층(피난층)",
+      "road_detail": "",
+      "expected": "B1"
+    },
+    {
+      "no": 21,
+      "stratum": "random",
+      "tail": "벽산아파트분산상가 상가1동 B08호",
+      "road_detail": "상가1동 지하1층 B08호 (시흥동, 벽산아파트분산상가 )",
+      "expected": "B1"
+    },
+    {
+      "no": 22,
+      "stratum": "random",
+      "tail": "푸른수목원",
+      "road_detail": "푸른수목원 안내센터 1층 (항동)",
+      "expected": "1"
+    },
+    {
+      "no": 23,
+      "stratum": "random",
+      "tail": "",
+      "road_detail": "4층 (명일동)",
+      "expected": "4"
+    },
+    {
+      "no": 24,
+      "stratum": "tricky",
+      "tail": "1층26호",
+      "road_detail": "1층 26호 (청량리동, 미주상가)",
+      "expected": "1"
+    },
+    {
+      "no": 25,
+      "stratum": "tricky",
+      "tail": "새롬프라자 1층 105호",
+      "road_detail": "새롬프라자 1층 105호 (내발산동)",
+      "expected": "1"
+    },
+    {
+      "no": 26,
+      "stratum": "tricky",
+      "tail": "",
+      "road_detail": "지하1층 (안암동5가, 현대자동차 경영관)",
+      "expected": "B1"
+    },
+    {
+      "no": 27,
+      "stratum": "random",
+      "tail": "1층",
+      "road_detail": "동신빌딩 1층 (양재동)",
+      "expected": "1"
+    },
+    {
+      "no": 28,
+      "stratum": "random",
+      "tail": "",
+      "road_detail": "10층 (삼성동, 무역센터현대백화점)",
+      "expected": "10"
+    },
+    {
+      "no": 29,
+      "stratum": "random",
+      "tail": "가든파이브라이프",
+      "road_detail": "현대시티몰 가든파이브점 지하1층 일부호 (문정동)",
+      "expected": "B1"
+    },
+    {
+      "no": 30,
+      "stratum": "tricky",
+      "tail": "",
+      "road_detail": "지하2층 (상수동, 학교법인홍익학원 홍익대학교 홍문관)",
+      "expected": "B2"
+    },
+    {
+      "no": 31,
+      "stratum": "tricky",
+      "tail": "신트리2단지아파트",
+      "road_detail": "상가동 1층 103호 (신정동, 신트리2단지아파트)",
+      "expected": "1"
+    },
+    {
+      "no": 32,
+      "stratum": "random",
+      "tail": "",
+      "road_detail": "2층 201호 (서교동, 일부)",
+      "expected": "2"
+    },
+    {
+      "no": 33,
+      "stratum": "tricky",
+      "tail": "상암 월드시티 1동 105호",
+      "road_detail": "상암 월드시티 1동 105호 (성산동)",
+      "expected": null
+    },
+    {
+      "no": 34,
+      "stratum": "tricky",
+      "tail": "사러가쇼핑 내 1층 11호",
+      "road_detail": "사러가쇼핑 내 1층 11호)",
+      "expected": "1"
+    },
+    {
+      "no": 35,
+      "stratum": "random",
+      "tail": "LG팰리스 지하205호",
+      "road_detail": "",
+      "expected": null
+    },
+    {
+      "no": 36,
+      "stratum": "tricky",
+      "tail": "태림펜트윈",
+      "road_detail": "1층 101호 (상암동, 태림펜트윈)",
+      "expected": "1"
+    },
+    {
+      "no": 37,
+      "stratum": "tricky",
+      "tail": "새벽교회",
+      "road_detail": "새벽교회 1,2층 (공릉동)",
+      "expected": "1"
+    },
+    {
+      "no": 38,
+      "stratum": "tricky",
+      "tail": "소망빌딩",
+      "road_detail": "102호 (행당동, 소망빌딩)",
+      "expected": null
+    },
+    {
+      "no": 39,
+      "stratum": "tricky",
+      "tail": "아일렉스",
+      "road_detail": "아일렉스 아일렉스 상가동 2층 204호, 205호 (여의도동)",
+      "expected": "2"
+    },
+    {
+      "no": 40,
+      "stratum": "random",
+      "tail": "",
+      "road_detail": "수의과학대학 3층)",
+      "expected": "3"
+    }
+  ]
+}
