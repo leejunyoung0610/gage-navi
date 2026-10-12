@@ -1,4 +1,4 @@
-"""일괄 폐업일 규칙과 W0 방식 비교 (T-015). 여기의 관할 코드·날짜·건수는 모두 가상 예시다."""
+"""폐업 처리 급증일 규칙 측정 (T-015). 여기의 관할 코드·날짜·건수는 모두 가상 예시다."""
 
 from datetime import date, timedelta
 
@@ -176,8 +176,13 @@ def test_validity_rates() -> None:
     assert rates[(GROUP_BULK, "2020~")].successor == 3
     assert rates[(GROUP_BULK, "2010~2019")].records == 0
     report = render_report(compare(records_frame(rows)), tuple(rates.values()), START, [], 42)
-    assert "| ① 새 규칙이 표시한 폐업 | 30 | 30 | 3 | **10.00%** | 10.00% | 0.00% |" in report
-    assert "| ② 표시 안 된 일반 폐업 | 8 | 8 | 1 | **12.50%** | 12.50% | 0.00% |" in report
+    assert (
+        "| ① 새 규칙이 표시한 폐업 | 30 | 30 (100.00%) | 3 | **10.00%** | 10.00% | 0.00% |"
+        in report
+    )
+    assert (
+        "| ② 표시 안 된 일반 폐업 | 8 | 8 (100.00%) | 1 | **12.50%** | 12.50% | 0.00% |" in report
+    )
 
 
 def test_parse_area_x100() -> None:

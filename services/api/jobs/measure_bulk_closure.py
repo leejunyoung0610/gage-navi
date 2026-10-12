@@ -1,12 +1,12 @@
-"""일괄 폐업일 규칙과 W0 방식 비교 (docs/10 §5 검증, T-015 수용 기준).
+"""폐업 처리 급증일 규칙의 측정 리포트 (docs/10 §5, ADR-020, T-015).
 
     python -m jobs.measure_bulk_closure --general PATH --rest PATH --bakery PATH \\
         --legal-dong PATH [--out PATH]
 
-타당성 검증(ADR-020): 같은 층키에서 같은 호 또는 면적 ±1%인 다른 기록이 공식 폐업일 전에 이미
+탐지 날짜 수·기록 수, W0 방식(일반음식점, 서울 전체 하루 100건 이상)과의 일치, 타당성 측정을
+적는다. 타당성 측정: 같은 층키에서 같은 호 또는 면적 ±1%인 다른 기록이 공식 폐업일 전에 이미
 개업한 비율을 ① 새 규칙이 표시한 폐업 ② 표시 안 된 일반 폐업 ③ W0만 일괄로 본 날의 폐업으로
-나눠 잰다. 통과 여부("①이 ②보다 뚜렷하게 높고 ③이 ②와 비슷")는 사람이 리포트를 보고 정한다.
-W0 방식(일반음식점, 서울 전체 하루 100건 이상)과의 일치율은 참고값으로 함께 적는다.
+나눠 잰다. 통과·실패를 정하지 않는다 — 결과의 해석은 ADR-020.
 """
 
 import argparse
@@ -322,7 +322,8 @@ def _percent(part: int, whole: int) -> str:
 
 def _rate_rows(rates: tuple[GroupRate, ...], era: str | None) -> list[str]:
     return [
-        f"| {rate.group} | {rate.records:,} | {rate.eligible:,} | {rate.successor:,} "
+        f"| {rate.group} | {rate.records:,} | {rate.eligible:,} "
+        f"({_percent(rate.eligible, rate.records)}) | {rate.successor:,} "
         f"| **{_percent(rate.successor, rate.eligible)}** | {_percent(rate.by_ho, rate.eligible)} "
         f"| {_percent(rate.by_area, rate.eligible)} |"
         for rate in rates
@@ -339,7 +340,7 @@ def render_report(
 ) -> str:
     hit_rest = result.hit_day_records - result.covered
     lines = [
-        "# 일괄 폐업일 규칙과 W0 방식 비교 (T-015, docs/10 §5)",
+        "# 폐업 처리 급증일 규칙 측정 (T-015, docs/10 §5, ADR-020)",
         "",
         "`python -m jobs.measure_bulk_closure`가 만든 파일이다. 손으로 고치지 않는다.",
         "",
@@ -350,12 +351,11 @@ def render_report(
         " (식품 3종 합산)",
         f"- W0 방식: 일반음식점, 서울 전체 하루 {W0_MIN_COUNT}건 이상",
         "",
-        "## 타당성 검증 (수용 기준, ADR-020)",
+        "## 타당성 측정 (해석은 ADR-020)",
         "",
         "같은 층키(PNU+층)에서 같은 호(`ho_list` 겹침) 또는 면적 ±1%인 다른 기록이, 이 기록보다 "
         "나중에 그리고 이 기록의 공식 폐업일 전에 이미 개업한 비율. 분모는 층키·개업일·폐업일이 "
-        "모두 있는 폐업 기록. **①이 ②보다 뚜렷하게 높고 ③이 ②와 비슷하면 통과**"
-        "(판정은 사람이 한다).",
+        "모두 있는 폐업 기록이고, 괄호는 폐업 기록 중 분모에 든 비율이다.",
         "",
         "| 묶음 | 폐업 기록 | 분모 | 해당 | 비율 | 같은 호 | 면적 ±1% |",
         "|---|---|---|---|---|---|---|",
@@ -363,7 +363,7 @@ def render_report(
         "",
         "### 폐업 연도 구간별",
         "",
-        "일괄 정리는 특정 시기에 몰려 있어, 층 정보가 있는 비율과 건물의 기록 밀도가 시기마다 "
+        "급증일은 특정 시기에 몰려 있어, 층 정보가 있는 비율과 건물의 기록 밀도가 시기마다 "
         "다른 영향을 따로 본다.",
     ]
     for _, _, era in ERAS:
@@ -423,7 +423,7 @@ def render_report(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="jobs.measure_bulk_closure", description="일괄 폐업일 규칙과 W0 방식 비교"
+        prog="jobs.measure_bulk_closure", description="폐업 처리 급증일 규칙 측정"
     )
     parser.add_argument("--general", type=Path, required=True, help="일반음식점 원천 CSV")
     parser.add_argument("--rest", type=Path, required=True, help="휴게음식점 원천 CSV")

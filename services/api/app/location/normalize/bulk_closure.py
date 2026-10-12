@@ -1,4 +1,7 @@
-"""행정 일괄 폐업일 탐지 (docs/10 §5, ADR-020).
+"""폐업 처리 급증일 탐지 (docs/10 §5, ADR-020).
+
+한 관할에서 하루에 평소보다 훨씬 많은 폐업이 처리된 날을 찾는다. 그날이 "행정 일괄 정리"라는
+해석은 검증하지 못했다 — 이 모듈은 건수 사실만 다룬다.
 
     c(j, d) = 관할 j, 날짜 d의 폐업 건수 (식품 3종 합산)
     m(j)    = 관할 j에서 폐업이 1건 이상 있었던 날들의 c(j, d) 중앙값
@@ -37,7 +40,7 @@ def daily_counts(closures: pd.DataFrame) -> pd.DataFrame:
 def detect_bulk_days(
     closures: pd.DataFrame, min_count: int = MIN_COUNT, median_multiple: int = MEDIAN_MULTIPLE
 ) -> pd.DataFrame:
-    """일괄 폐업일로 판정된 (`jurisdiction`, `closed_on`)과 그 `count`, `median`.
+    """급증일로 판정된 (`jurisdiction`, `closed_on`)과 그 `count`, `median`.
 
     임계값 인자는 민감도 측정용이다. 서비스 값은 기본값(문서 값)만 쓴다.
     """
