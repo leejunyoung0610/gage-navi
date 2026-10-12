@@ -25,7 +25,7 @@
 ### T-002 Docker Compose · 헬스체크 ⏱2h
 - **할 일**: `services/api/Dockerfile`, `docker-compose.yml`(이미 있는 초안 사용), `GET /api/v1/health`
 - **수용 기준**
-  - [ ] `docker compose up` 후 `/api/v1/health` → 200, `db: ok`
+  - [ ] `docker compose up db api` 후 `/api/v1/health` → 200, `db: ok` (`web`은 Dockerfile이 생기는 T-030부터)
   - [ ] DB 중지 시 503 + 오류 코드 `SERVICE_UNAVAILABLE` (docs/30 §1)
 - **참고**: docs/30 §1·2
 

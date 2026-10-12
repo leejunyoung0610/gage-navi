@@ -37,6 +37,9 @@
 ### `GET /api/v1/health`
 `{"status": "ok", "db": "ok", "location_snapshot": "2026-11", "approved_rules": 14}`
 
+- 공통 응답(§1)의 예외: 성공 응답을 `data`/`meta`로 감싸지 않는다 (모니터링 도구용). 오류는 §1 형식 그대로 503 `SERVICE_UNAVAILABLE`
+- `location_snapshot`·`approved_rules`는 값을 알 수 없으면 `null` (해당 테이블이 없는 T-003·T-005 이전 포함)
+
 ### `GET /api/v1/address/search?q={검색어}&page={1}`
 도로명주소 API 프록시. `q` 2자 이상.
 ```json

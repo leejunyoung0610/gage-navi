@@ -113,4 +113,5 @@
 | 2026-10-12 | (docs/01 §2 표의 초기 스택) | 설계 확정 | — |
 | 2026-10-12 | uvicorn | FastAPI 실행용 ASGI 서버 (`make dev`, T-002 Dockerfile) | hypercorn, `fastapi[standard]`(불필요한 부가 의존성 포함) |
 | 2026-10-12 | pre-commit (dev) | 커밋 전 ruff·prettier 실행 (T-001). 훅은 `repo: local`로 잠금 파일의 도구 버전을 사용 | husky + lint-staged(Node 전용), 훅 없음 |
+| 2026-10-12 | httpx2 (dev) | FastAPI `TestClient`가 요구 (T-002). Starlette가 `httpx` 대신 권장 | httpx(Starlette에서 사용 중단 경고), ASGI 직접 호출 |
 | 2026-10-12 | eslint-config-prettier (dev) | ESLint 포맷 규칙과 Prettier 충돌 제거 | 규칙 수동 비활성화 |

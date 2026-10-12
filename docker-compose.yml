@@ -17,7 +17,7 @@ services:
 
   api:
     build:
-      context: ./services/api      # Dockerfile은 T-002에서 작성
+      context: ./services/api
     env_file: .env
     environment:
       STORAGE_DIR: /app/storage

@@ -34,7 +34,7 @@ dev: ## 로컬 실행 (API :8000, 웹 :3000). DB는 docker compose up -d db
 	$(MAKE) -j2 dev-api dev-web
 
 dev-api:
-	cd $(API) && uv run uvicorn app.main:app --reload --port 8000
+	cd $(API) && uv run $(if $(wildcard .env),--env-file ../../.env) uvicorn app.main:app --reload --port 8000
 
 dev-web:
 	cd $(WEB) && pnpm dev
