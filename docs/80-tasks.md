@@ -469,3 +469,4 @@
 |---|---|---|---|
 | (미정) | 422·500 공통 오류 핸들러 | 지금은 `ApiError`만 docs/30 §1 형식으로 나간다. 요청 검증 실패(`VALIDATION_ERROR`, `details.fields`)와 처리되지 않은 예외(`INTERNAL`, 일반 문구)는 FastAPI 기본 형식 그대로다. 첫 공개 API(T-021·T-022) 전에 필요 | 2026-10-12 |
 | (미정) | 요청 ID 미들웨어 | 지금은 오류 응답을 만들 때만 `request_id`를 생성한다. 요청마다 한 번 만들어 성공 응답 `meta.request_id`와 로그(요청 ID·경로·상태 코드·지연 시간, docs/01 §6)에 같은 값을 써야 한다 | 2026-10-12 |
+| (미정) | 마이그레이션 테스트 헬퍼 공용화 | `test_migration_0001.py`와 `test_migration_0002.py`에 스키마 조회(`_fetch_all`·`_schema`·`SCHEMA_QUERIES`)와 롤백 실행(`_run_in_rollback`) 헬퍼 약 40줄이 중복된다. `tests/integration/conftest.py`(또는 공용 모듈)로 옮긴다. 세 번째 마이그레이션 테스트 전에 하면 좋다 | 2026-10-12 |

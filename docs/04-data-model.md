@@ -5,7 +5,8 @@
 ## 1. 공통 규칙
 
 - 시각은 `TIMESTAMPTZ`(UTC 저장, 표시는 Asia/Seoul). 날짜는 `DATE`.
-- 금액은 `BIGINT`(원). 비율은 `NUMERIC(6,4)`.
+- 금액은 `BIGINT`(원). 비율(0~1, `base_rate.rate` 등)은 `NUMERIC(6,4)`.
+  - 예외: 유사도 점수 `evidence.similarity`는 `NUMERIC(4,3)`, 퍼센트 값 `rate_base.annual_pct`는 `NUMERIC(6,3)`.
 - 상태값은 `TEXT + CHECK`(PostgreSQL ENUM 사용 안 함 — 마이그레이션 단순화).
 - 모든 파생 테이블에 `method_version`(계산 로직 버전) 또는 `parse_version`을 둔다. 값 형식: `YYYY.MM.N` (예: `2026.10.1`).
 
