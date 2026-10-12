@@ -14,6 +14,7 @@ from sqlalchemy.pool import NullPool
 
 from app.address import legal_dong_file
 from app.core import db
+from app.location.history.job import HistoryResult, build_history
 from app.location.ingest.license_file import ingest_file
 from app.location.normalize.job import NormalizeError, NormalizeResult, run_normalize
 from app.location.normalize.records import PARSE_VERSION, SOURCE_COLUMNS
@@ -89,7 +90,8 @@ def clean_db(migrated_db_url: str) -> str:
     """테이블을 비우고 가상 법정동 두 개를 넣은 DB."""
     execute(
         migrated_db_url,
-        "TRUNCATE license_record, closure_surge_day, data_snapshot, legal_dong CASCADE",
+        "TRUNCATE license_record, closure_surge_day, floor_summary, parcel, data_snapshot, "
+        "legal_dong CASCADE",
         *(
             "INSERT INTO legal_dong (code, sido, sigungu, eupmyeondong, full_name) "
             f"VALUES ('{code}', '서울특별시', '{sigungu}', '{dong}', '서울특별시 {sigungu} {dong}')"
@@ -358,7 +360,7 @@ def test_needs_snapshots_and_legal_dong(clean_db: str, tmp_path: Path) -> None:
 
 
 def test_seoul_food3_normalizes_within_ten_minutes(clean_db: str) -> None:
-    """T-016 수용 기준: 서울 식품 3종 전체 정규화 10분 이내."""
+    """T-016 수용 기준: 서울 식품 3종 전체 정규화 10분 이내. T-018: 층 이력 빌드 3분 이내."""
     missing = [path for path in [*REAL_FILES.values(), REAL_LEGAL_DONG] if not path.exists()]
     if missing:
         pytest.skip(f"원천 파일이 없어 건너뜀: {missing[0]} (data/README.md 참고)")
@@ -380,3 +382,16 @@ def test_seoul_food3_normalizes_within_ten_minutes(clean_db: str) -> None:
         == sum(s.validation["input_rows"] for s in result.snapshots) - excluded - isolated
     )
     print(f"\n서울 식품 3종 정규화: {result.records:,}건, {seconds:.1f}초")
+
+    # T-018 수용 기준: 층 이력 빌드 서울 전체 3분 이내 (같은 적재 결과를 이어서 쓴다)
+    started = time.perf_counter()
+    history: HistoryResult = with_engine(clean_db, build_history)
+    seconds = time.perf_counter() - started
+    assert seconds < 180
+    assert history.parcels == fetch_all(clean_db, "SELECT count(*) AS n FROM parcel")[0].n
+    assert history.floors == fetch_all(clean_db, "SELECT count(*) AS n FROM floor_summary")[0].n
+    assert history.priors == fetch_all(clean_db, "SELECT count(*) AS n FROM record_prior")[0].n
+    print(
+        f"서울 식품 3종 층 이력 빌드: 필지 {history.parcels:,}, 층키 {history.floors:,}, "
+        f"{seconds:.1f}초"
+    )
