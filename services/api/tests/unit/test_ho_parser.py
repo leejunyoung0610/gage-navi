@@ -1,5 +1,9 @@
 """호 파서 (docs/10 §4)."""
 
+import json
+from pathlib import Path
+from typing import Any
+
 import pytest
 
 from app.location.normalize.ho_parser import HoResult, parse_ho, parse_ho_text
@@ -22,7 +26,13 @@ DOC_CASES = [
     ("국민대학교 3동 2호관 1층", []),
     ("당산빌딩 지하1층 113호실", ["113"]),
     ("잠실지하상가 D-12호", ["12"]),
+    ("지1층 B132-A호", ["132-A"]),
+    ("101-b호 101-A호 101-2호 101호 102호", ["101", "101-2", "101-A", "101-B", "102"]),
+    ("지하1층 20.21호", ["20", "21"]),
+    ("지하 6.10.11.12호", ["6", "10", "11", "12"]),
+    ("104.1호", ["104-1"]),
     ("214~215호", ["215"]),
+    ("지하29,30 호동", []),
 ]
 
 # 규칙 경계 (문서 표에 없는 것)
@@ -54,8 +64,17 @@ EXTRA_CASES = [
     ("201-5호 201호", ["201", "201-5"]),
     ("24-25-26호", []),
     ("B201,B202,B203호", ["203"]),
-    ("지하1층 20.21호", ["21"]),
-    ("지하29,30 호동", []),
+    ("101-A,101-B,102-A,102-B호", ["101-A", "101-B", "102-A", "102-B"]),
+    ("중앙대병원 B101-B호", ["101-B"]),
+    ("101-AB호", []),
+    ("101B호", []),
+    ("A동 109.110호", ["109", "110"]),
+    ("1.2.3.4.5.6.11호", ["1", "2", "3", "4", "5", "6", "11"]),
+    ("105 . 6호", ["105-6"]),
+    ("12.3호", ["3", "12"]),
+    ("104.12호", ["12", "104"]),
+    ("102.3.201호", ["102-3", "201"]),
+    ("104.1호 104-1호", ["104-1"]),
     ("2 호선 가상역", []),
     ("동양미래대학교 3호관동 1층", []),
     ("지하 243-6호점", []),
@@ -98,3 +117,39 @@ def test_tail_only() -> None:
 def test_no_ho() -> None:
     assert parse_ho("가상상가 1층", None) == HoResult([], None, False)
     assert parse_ho(None, "") == HoResult([], None, False)
+
+
+# 실제 데이터 20건 (T-013). 기대값은 파서 결과를 보지 않고 실제 호실 기준으로 썼다.
+# 작성자는 건별 `labeled_by`. 추출: `jobs.sample_ho_cases` (seed·모집단은 파일에 기록)
+REAL_CASES = json.loads(
+    (Path(__file__).parent / "data" / "ho_real_cases.json").read_text(encoding="utf-8")
+)["cases"]
+
+
+def _parsed(case: dict[str, Any]) -> list[str]:
+    return parse_ho(case["tail"], case["road_detail"]).ho_list
+
+
+def test_real_cases_are_all_labeled() -> None:
+    assert len(REAL_CASES) == 20
+    assert sum(case["stratum"] == "tricky" for case in REAL_CASES) == 10
+    assert all(isinstance(case["expected"], list) and case["labeled_by"] for case in REAL_CASES)
+
+
+def test_real_cases_summary() -> None:
+    """실제 데이터 20건 중 정답 일치 19건, 알려진 한계 1건."""
+    matched = [case["no"] for case in REAL_CASES if _parsed(case) == case["expected"]]
+    known_limits = [case["no"] for case in REAL_CASES if "known_limit" in case]
+    assert (len(matched), known_limits) == (19, [7])
+
+
+@pytest.mark.parametrize("case", REAL_CASES, ids=lambda case: f"real-{case['no']:02d}")
+def test_real_cases(case: dict[str, Any]) -> None:
+    if "known_limit" in case:
+        # 알려진 한계: 기대값(실제 호실)은 그대로 두고 지금의 파서 결과를 확인한다.
+        # 규칙을 고쳐 정답을 내게 되면 이 테스트가 깨져서 `known_limit`을 지우라고 알려 준다
+        assert case["known_limit"]
+        assert case["parser_output"] != case["expected"]
+        assert _parsed(case) == case["parser_output"]
+    else:
+        assert _parsed(case) == case["expected"]
