@@ -1,6 +1,6 @@
 # 04. 데이터 모델 (PostgreSQL 16 + PostGIS)
 
-> 마이그레이션은 Alembic으로만. §2 = `0001_location`(T-003) + `0003_normalize`(T-016: `license_record.no_fixed_place`, `closure_surge_day`) + `0004_stale_area`(T-017: `license_record.stale_area_match`), §3 = `0002_rules`(T-005). 아래 DDL은 기준 명세이며, 구현 시 이름·타입·제약을 그대로 따른다. 변경은 이 문서를 먼저 고친다.
+> 마이그레이션은 Alembic으로만. §2 = `0001_location`(T-003) + `0003_normalize`(T-016: `license_record.no_fixed_place`, `closure_surge_day`) + `0004_stale_area`(T-017: `license_record.stale_area_match`) + `0005_prior_ex_surge`(T-018: `record_prior.prior_closures_floor_ex_surge`), §3 = `0002_rules`(T-005). 아래 DDL은 기준 명세이며, 구현 시 이름·타입·제약을 그대로 따른다. 변경은 이 문서를 먼저 고친다.
 
 ## 1. 공통 규칙
 
@@ -101,10 +101,10 @@ CREATE TABLE parcel (
   pnu             CHAR(19) PRIMARY KEY,
   legal_dong_code CHAR(10) NOT NULL REFERENCES legal_dong(code),
   jibun_label     TEXT NOT NULL,         -- '서울특별시 광진구 화양동 47-1'
-  road_addr       TEXT,                  -- 가장 최근 기록의 도로명주소(상세 제외)
-  geom            GEOMETRY(Point, 4326),
+  road_addr       TEXT,                  -- 가장 최근에 개업한 기록의 도로명주소(상세 제외). 없으면 그 앞 기록
+  geom            GEOMETRY(Point, 4326), -- 좌표가 있는 기록 중 가장 최근에 개업한 기록의 좌표
   floors          TEXT[] NOT NULL,       -- 이력이 있는 층, 정렬: B2,B1,1,2,…
-  record_count    INT NOT NULL,
+  record_count    INT NOT NULL,          -- 이력에 보이는 기록 수 (층 정보 없는 기록 포함, docs/10 §7.1의 제외 적용)
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -121,10 +121,11 @@ CREATE TABLE floor_summary (
   PRIMARY KEY (pnu, floor)
 );
 
--- 기록별 과거 폐업 횟수 (층키 기준, docs/10 §6)
+-- 기록별 과거 폐업 횟수 (층키 기준, docs/10 §7.2). 급증일 폐업을 포함한 값과 뺀 값을 둘 다 둔다
 CREATE TABLE record_prior (
   record_id             BIGINT PRIMARY KEY REFERENCES license_record(id) ON DELETE CASCADE,
-  prior_closures_floor  INT NOT NULL,
+  prior_closures_floor  INT NOT NULL,          -- 같은 층키에서 개업일 전에 폐업한 기록 수 (급증일 폐업 포함)
+  prior_closures_floor_ex_surge INT NOT NULL,  -- 그중 bulk_closure = true인 폐업을 뺀 수
   method_version        TEXT NOT NULL,
   computed_at           TIMESTAMPTZ NOT NULL DEFAULT now()
 );

@@ -115,6 +115,6 @@ HWP / HWPX / PDF. 변환 방식은 docs/20 §10.2, T-051S 스파이크로 확정
 | 작업 | 주기 | 명령 |
 |---|---|---|
 | 인허가 전체 적재 + 정규화 | 월 1회, 🧑 포털에서 세 파일을 내려받은 뒤 (ADR-025) | `jobs.ingest_licenses --mode full --type … --file data/raw/<다운로드일>/…` (세 번) → `jobs.normalize_licenses` → `jobs.flag_stale_suspects` |
-| 층 이력·과거 폐업 횟수 재계산 | 인허가 적재 후 | `jobs.build_history` |
+| 층 이력·과거 폐업 횟수 재계산 | 인허가 적재·정규화·미갱신 표시 후 | `jobs.build_history` |
 | 기준율 통계·모형 카드 | 이력 재계산 후 | `jobs.compute_base_rates` |
 | 공고 수집·변경 감지 | 매일 09:00, 18:00 | `jobs.collect_announcements` |

@@ -238,7 +238,21 @@ bulk(j, d) = c(j, d) >= 30 AND c(j, d) >= 10 * m(j)
 - `tenure_days` = (`closed_on` 또는 기준일) − `opened_on`
 - 같은 `ho_list` 원소를 공유하는 기록끼리는 화면에서 "같은 호수로 신고된 기록"으로 묶어 색을 맞춘다 (연결선 표시)
 - `has_concurrent` = 이력 중 영업 기간이 30일 넘게 겹치는 쌍 존재 → "이 층에는 여러 점포가 함께 있을 수 있어요"
-- `record_suppression`에 있는 기록과 `no_fixed_place = true`인 기록은 제외 (§1.1)
+- `record_suppression`에 있는 기록과 `no_fixed_place = true`인 기록은 제외 (§1.1). 편의점은 이력에 보이고 `biz_category`로 구분된다
+
+**빌드 (`jobs.build_history`, T-018)** — 정규화·미갱신 표시 뒤에 실행한다. `parcel`·`floor_summary`·`record_prior`를 전부 다시 만든다(같은 입력이면 같은 결과)
+
+- 기준일: 인자 `--as-of`. 주지 않으면 `validated` 스냅샷의 `source_updated_max` 중 가장 이른 날짜(Asia/Seoul) — 통계 기준일(T-019)·`location_snapshot`과 같은 날짜
+- 이력에 보이는 기록 `H` = `pnu`가 있고 `no_fixed_place = false`이며 `record_suppression`에 없는 기록
+- `parcel`: `H`에 기록이 1건 이상 있는 필지마다 1행(층 정보가 하나도 없으면 `floors = {}`)
+  - `jibun_label` = `legal_dong.full_name` + (산이면 ` 산`) + ` 본번`(부번이 0이 아니면 `-부번`) — PNU에서 만든다
+  - `road_addr` = 도로명주소가 있는 기록 중 가장 최근에 개업한 기록의 도로명주소에서 첫 쉼표 앞부분. `geom` = 좌표가 있는 기록 중 가장 최근에 개업한 기록의 좌표. 개업일이 같으면 `id`가 큰 쪽, 개업일이 없는 기록은 맨 뒤
+  - `floors` = `H`에서 층이 있는 기록의 층, §3의 정렬 순서. `record_count` = `H`의 그 필지 기록 수(층 없는 기록 포함)
+- `floor_summary`: `H`에서 층이 있는 기록의 층키마다 1행
+  - `record_count`, `records_since_2005`(`opened_on ≥ 2005-01-01`), `open_now_count`(`status='open'`)
+  - `median_closed_tenure_days` = `status='closed'`이고 개업일·폐업일이 있으며 `bulk_closure = false`인 기록의 `closed_on − opened_on` 중앙값(짝수 개면 가운데 두 값의 평균, 0.5는 올림). 해당 기록이 없으면 `NULL`
+  - `has_concurrent`: 기록의 영업 기간 = `[opened_on, closed_on]`, 영업 중이면 `[opened_on, 기준일]`. 두 기록의 겹침 = `min(끝) − max(시작)`일. **30일을 넘는**(31일 이상) 쌍이 있으면 참. 개업일이 없거나, 폐업인데 폐업일이 없는 기록은 기간을 알 수 없으므로 이 판정에서 뺀다
+- `record_prior`: §7.2의 `F`에서 개업일이 있는 기록마다 1행 (숨김 기록도 포함 — 통계용 값이다)
 
 **알림(`notices`) 발생 조건**
 
@@ -253,7 +267,9 @@ bulk(j, d) = c(j, d) >= 30 AND c(j, d) >= 10 * m(j)
 
 **정의 (method_version `2026.10.1`)**
 - 층키 기록 집합 `F(pnu, floor)` — 식품 3종, `floor IS NOT NULL`, `no_fixed_place = false` (§1.1)
-- 기록 r의 과거 폐업 횟수: `prior(r) = |{ s ∈ F : s ≠ r, s.status='closed', s.closed_on < r.opened_on }|` (일괄 폐업 기록 포함)
+- 기록 r의 과거 폐업 횟수: `prior(r) = |{ s ∈ F : s ≠ r, s.status='closed', s.closed_on < r.opened_on }|`. 같은 날 폐업·개업은 세지 않는다(`<`)
+  - **두 값을 함께 저장한다**(`record_prior`): 급증일 폐업을 포함한 `prior_closures_floor`와, `s.bulk_closure = true`인 폐업을 뺀 `prior_closures_floor_ex_surge`. 계산 함수는 "세지 않을 폐업"을 인자로 받으므로 W0 정의(서울 전체 하루 100건 이상)로 뺀 값도 같은 함수로 낸다
+  - **어느 값을 기본으로 쓸지는 T-019의 민감도 결과(제외 없음 / 새 규칙 / W0 정의)를 보고 정한다.** 그 전까지 아래 정의의 "과거 폐업 횟수"는 포함한 값이다
 - 코호트: `opened_on ∈ [2005-01-01, 기준일 − 1095일]`, `pnu`·`floor` 있음, `r.bulk_closure = false`, `r.biz_category ≠ '편의점'` (§1.1 — 편의점 기록은 `F`에는 남아 다른 기록의 과거 폐업 횟수에는 들어간다. 포함했을 때의 결과는 §7.3 `sensitivity.convenience_store`)
 - 결과: `event(r) = r.status='closed' AND r.closed_on − r.opened_on ≤ 1095일`
 - 버킷: `0, 1, 2, 3, 4+`
@@ -266,7 +282,7 @@ bulk(j, d) = c(j, d) >= 30 AND c(j, d) >= 10 * m(j)
   ```
 - **표시 조건**: 해당 버킷 `n ≥ 200`. 시군구 버킷이 조건을 만족하면 시군구 값을 주로, 서울 값을 보조로 표시. 아니면 서울 값만
 
-**화면의 "이 층의 현재 과거 폐업 횟수"** = `|{ s ∈ F : s.status='closed', s.closed_on ≤ 기준일 }|` → 버킷 매핑
+**화면의 "이 층의 현재 과거 폐업 횟수"** = `|{ s ∈ F : s.status='closed', s.closed_on ≤ 기준일 }|` → 버킷 매핑. 급증일 폐업을 포함할지는 위와 같이 T-019에서 정하고, T-022가 `license_record`에서 센다
 
 ### 7.3 모형 카드 (방법론 페이지)
 
