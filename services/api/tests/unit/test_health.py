@@ -16,7 +16,11 @@ def test_health_ok(monkeypatch: pytest.MonkeyPatch) -> None:
     async def ok() -> None:
         return None
 
+    async def no_snapshot() -> None:
+        return None
+
     monkeypatch.setattr(db, "ping_db", ok)
+    monkeypatch.setattr(db, "location_snapshot_label", no_snapshot)
     response = client.get("/api/v1/health")
     assert response.status_code == 200
     assert response.json() == {
@@ -25,6 +29,33 @@ def test_health_ok(monkeypatch: pytest.MonkeyPatch) -> None:
         "location_snapshot": None,
         "approved_rules": None,
     }
+
+
+def test_health_reports_location_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def ok() -> None:
+        return None
+
+    async def label() -> str:
+        return "2026-10"
+
+    monkeypatch.setattr(db, "ping_db", ok)
+    monkeypatch.setattr(db, "location_snapshot_label", label)
+    assert client.get("/api/v1/health").json()["location_snapshot"] == "2026-10"
+
+
+def test_health_snapshot_lookup_failure_is_null(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def ok() -> None:
+        return None
+
+    async def broken() -> str:
+        raise RuntimeError("relation does not exist")
+
+    monkeypatch.setattr(db, "ping_db", ok)
+    monkeypatch.setattr(db, "location_snapshot_label", broken)
+    response = client.get("/api/v1/health")
+    assert response.status_code == 200
+    assert response.json()["location_snapshot"] is None
+    assert "relation" not in response.text
 
 
 @pytest.mark.parametrize(
