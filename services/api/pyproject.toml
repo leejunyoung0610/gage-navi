@@ -35,6 +35,10 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
 
+[tool.ruff.lint.per-file-ignores]
+# 마이그레이션은 docs/04 DDL을 줄바꿈까지 그대로 옮긴다
+"alembic/versions/*.py" = ["E501"]
+
 [tool.mypy]
 python_version = "3.12"
 files = ["app", "jobs"]

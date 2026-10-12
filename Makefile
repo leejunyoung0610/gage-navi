@@ -26,8 +26,8 @@ check-web:
 	cd $(WEB) && pnpm format:check
 	cd $(WEB) && pnpm test
 
-test: ## 전체 테스트 (통합 테스트 포함)
-	cd $(API) && uv run pytest
+test: ## 전체 테스트 (통합 테스트 포함 — docker compose up -d db 필요)
+	cd $(API) && uv run $(if $(wildcard .env),--env-file ../../.env) pytest
 	cd $(WEB) && pnpm test
 
 dev: ## 로컬 실행 (API :8000, 웹 :3000). DB는 docker compose up -d db
