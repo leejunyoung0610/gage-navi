@@ -61,12 +61,12 @@
 ### T-010 인허가 파일 로더 ⏱5h 🧑
 - **할 일**:
   - 🧑 휴게음식점·제과점영업 데이터셋 ID·파일명·이용허락범위를 찾아 `data/README.md`에 기록(다운로드 날짜 포함)
-  - `jobs.ingest_licenses --mode full --type {general_restaurant|rest_restaurant|bakery} --file PATH`: 인코딩 자동 판별(CP949 우선, 실패 시 UTF-8), `csv` 모듈로 파싱(**주소에 줄바꿈 포함 행 존재**), 서울 필터(`지번주소` 또는 `도로명주소`가 `서울특별시`로 시작), `data_snapshot` + `license_raw`(COPY) 적재
+  - `jobs.ingest_licenses --mode full --type {general_restaurant|rest_restaurant|bakery} --file PATH`: 인코딩 자동 판별(CP949 우선, 실패 시 UTF-8), `csv` 모듈로 파싱(**주소에 줄바꿈 포함 행 존재**), `data_snapshot` + `license_raw`(COPY) 적재. **파일의 모든 행을 적재**하고, 주소가 서울 밖인 행(`지번주소`·`도로명주소` 둘 다 `서울특별시`로 시작하지 않음)은 빼지 않고 수만 기록한다 — 제외는 정규화(T-016)에서
   - D2 API 조사: 변경분 조회 가능 여부·필드명·한도를 `data/README.md`에 기록. 가능하면 `--mode incremental` 구현, 불가하면 월 1회 전체 적재로 대체하고 ADR 추가
 - **수용 기준**
   - [ ] 2026-10-08 서울 일반음식점 파일 적재 행 수 = 539,589
   - [ ] 줄바꿈 포함 주소 행 픽스처 파싱 테스트
-  - [ ] 서울 외 행 제외 수 로그
+  - [ ] 주소가 서울 밖인 행 수 로그·`data_snapshot.validation` 기록 (제외하지 않음. 2026-10-08 일반음식점 파일 14행)
   - [ ] 전체 적재 5분 이내 (로컬 기준)
 - **참고**: docs/03 D1·D2
 
