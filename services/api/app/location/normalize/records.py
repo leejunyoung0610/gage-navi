@@ -62,7 +62,9 @@ STATUS_MAP = {"영업/정상": "open", "폐업": "closed", "휴업": "suspended"
 NO_FIXED_PLACE_CATEGORIES = frozenset({"푸드트럭", "이동조리"})
 
 FLOOR_RATIO_FROM = date(2005, 1, 1)  # DV7: 2005년 이후 개업
-# DV8 서울 경계 상자 (docs/50 §2). TODO(🔎 T-016): 경계 값은 확인 전 — 넉넉히 잡은 값
+# DV8 서울 경계 상자 (docs/50 §2). 2026-10 세 파일의 변환 좌표 실측 범위(위도 37.4304~37.6921,
+# 경도 126.7795~127.1827)를 감싸는 상자. 좌표계 오류(수십 km 이상 이동)를 잡는 용도라 행정 경계와
+# 같을 필요가 없다
 SEOUL_LAT = (37.40, 37.72)
 SEOUL_LNG = (126.73, 127.27)
 _AREA_MAX = Decimal("99999999.99")  # NUMERIC(10,2)
