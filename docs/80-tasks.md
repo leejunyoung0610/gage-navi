@@ -125,6 +125,7 @@
   - [ ] 영업상태 원문 값 전체 목록을 `data/README.md`에 기록, 매핑 누락 0
   - [ ] DV 검사별 실패 유도 픽스처 테스트
   - [ ] 서울 식품 3종 전체 정규화 10분 이내
+  - [ ] `GET /api/v1/health`의 `location_snapshot`이 최신 성공 스냅샷 값으로 채워짐 (스냅샷이 없으면 `null`, docs/30 §2)
 - **참고**: docs/50 §2, docs/04 §2
 
 ### T-017 미갱신 의심 플래그 ⏱2h
@@ -352,6 +353,7 @@
 - **수용 기준**
   - [ ] 승인 즉시 평가 API가 새 버전 사용(캐시 무효화), 응답 `meta.rule_versions` 반영
   - [ ] 열린 `change_event` → `/programs`의 `under_review=true`
+  - [ ] `GET /api/v1/health`의 `approved_rules`가 현재 승인 규칙 수로 채워짐 (docs/30 §2)
 - **참고**: docs/20 §11
 
 ### T-056 정답셋 · 평가 러너 ⏱4h
