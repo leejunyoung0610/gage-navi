@@ -90,7 +90,7 @@ gage-navi/
 │   │   ├── address/               # 도로명주소 API 클라이언트·캐시, PNU 생성
 │   │   ├── location/
 │   │   │   ├── ingest/            # 인허가 파일/API 로더, raw 적재
-│   │   │   ├── normalize/         # pnu.py, floor_parser.py, ho_parser.py, coords.py, bulk_closure.py, stale.py
+│   │   │   ├── normalize/         # floor_parser.py, ho_parser.py, coords.py, bulk_closure.py, stale.py, records.py(행 정규화)·validation.py(DV)·job.py(DB 반영). PNU 생성은 address/pnu.py
 │   │   │   ├── history/           # parcel·floor_summary·record_prior 빌드
 │   │   │   ├── stats/             # base_rate.py (Wilson CI), model_card.py
 │   │   │   ├── matching/          # (게이트 전 비공개) 호실 연결 연구
@@ -105,7 +105,7 @@ gage-navi/
 │   │   ├── funding/               # 프로필→엔진 입력 어댑터, 목적함수 설정, api.py
 │   │   ├── closure/               # 어댑터, 법정 기한 레지스트리, api.py
 │   │   └── admin/                 # 관리자 라우터 모음
-│   ├── jobs/                      # CLI: ingest_licenses, build_history, compute_base_rates, collect_announcements …
+│   ├── jobs/                      # CLI: ingest_licenses, normalize_licenses, build_history, compute_base_rates, collect_announcements …
 │   └── tests/{unit,property,scenario,golden,integration}/
 ├── apps/web/
 │   ├── app/

@@ -1,7 +1,9 @@
 """DB 엔진 (SQLAlchemy 2 async + asyncpg)."""
 
 import asyncio
+from datetime import datetime
 from functools import lru_cache
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
@@ -9,6 +11,16 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from app.core.config import get_settings
 
 PING_TIMEOUT_SECONDS = 3.0
+DISPLAY_TZ = ZoneInfo("Asia/Seoul")
+
+# 정규화까지 통과한 종류별 최신 스냅샷의 데이터 기준 시각 중 가장 이른 값 (docs/30 §2)
+_LOCATION_SNAPSHOT = """
+SELECT min(source_updated_max) FROM (
+  SELECT DISTINCT ON (license_type) source_updated_max
+  FROM data_snapshot WHERE status = 'validated'
+  ORDER BY license_type, id DESC
+) latest
+"""
 
 
 class DatabaseNotConfiguredError(RuntimeError):
@@ -28,3 +40,11 @@ async def ping_db() -> None:
     async with asyncio.timeout(PING_TIMEOUT_SECONDS):
         async with get_engine().connect() as conn:
             await conn.execute(text("SELECT 1"))
+
+
+async def location_snapshot_label() -> str | None:
+    """`validated` 스냅샷의 데이터 기준 연-월(`YYYY-MM`, Asia/Seoul). 없으면 `None`."""
+    async with asyncio.timeout(PING_TIMEOUT_SECONDS):
+        async with get_engine().connect() as conn:
+            earliest: datetime | None = (await conn.execute(text(_LOCATION_SNAPSHOT))).scalar()
+    return None if earliest is None else earliest.astimezone(DISPLAY_TZ).strftime("%Y-%m")

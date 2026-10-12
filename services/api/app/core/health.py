@@ -17,7 +17,7 @@ router = APIRouter(tags=["health"])
 class HealthResponse(BaseModel):
     status: Literal["ok"]
     db: Literal["ok"]
-    # 값을 알 수 없으면 null. 스냅샷·규칙 테이블은 T-003·T-005 이후에 생긴다.
+    # 값을 알 수 없으면 null. `approved_rules`는 T-055에서 채운다.
     location_snapshot: str | None
     approved_rules: int | None
 
@@ -33,4 +33,15 @@ async def health() -> HealthResponse:
             "서비스에 일시적인 문제가 있어요. 잠시 후 다시 시도해 주세요.",
             {"db": "error"},
         ) from exc
-    return HealthResponse(status="ok", db="ok", location_snapshot=None, approved_rules=None)
+    return HealthResponse(
+        status="ok", db="ok", location_snapshot=await _location_snapshot(), approved_rules=None
+    )
+
+
+async def _location_snapshot() -> str | None:
+    """값을 알 수 없으면(테이블이 아직 없는 DB 등) `null`. 상태 확인 자체는 실패시키지 않는다."""
+    try:
+        return await db.location_snapshot_label()
+    except Exception as exc:
+        logger.warning("health: location snapshot lookup failed (%s)", type(exc).__name__)
+        return None
