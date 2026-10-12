@@ -16,7 +16,8 @@ from tests.license_csv import COLUMNS, ROWS, write_csv
 REPO_ROOT = Path(__file__).resolve().parents[4]
 # 실제 원천 파일 (gitignore). 없으면 해당 테스트는 건너뛴다.
 GENERAL_RESTAURANT_FILE = Path(
-    os.environ.get("LICENSE_GENERAL_CSV") or REPO_ROOT / "data" / "식품_일반음식점_서울특별시.csv"
+    os.environ.get("LICENSE_GENERAL_CSV")
+    or REPO_ROOT / "data" / "raw" / "2026-10-08" / "식품_일반음식점_서울특별시.csv"
 )
 
 

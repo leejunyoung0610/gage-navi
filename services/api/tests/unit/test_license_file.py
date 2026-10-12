@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from app.location.ingest import license_file
 from app.location.ingest.license_file import (
     LicenseFileError,
     has_seoul_address,
@@ -90,11 +91,40 @@ def test_unreadable_source_time_is_none(value: str) -> None:
     assert parse_source_time(value) is None
 
 
-def test_cli_rejects_incremental_mode(capsys: pytest.CaptureFixture[str]) -> None:
-    assert ingest_licenses.main(["--mode", "incremental", "--type", "bakery"]) == 2
+def test_bad_byte_after_first_chunk_is_rejected(tmp_path: Path) -> None:
+    """뒤쪽에 깨진 바이트가 하나만 있어도 대체 문자로 넘기지 않고 실패한다 (errors=strict)."""
+    path = write_csv(tmp_path / "a.csv")
+    path.write_bytes(path.read_bytes() + b"x" * (license_file._CHUNK + 10) + b"\xff\xff\r\n")
+    with pytest.raises(LicenseFileError, match="인코딩"):
+        inspect_file(path)
+
+
+@pytest.mark.parametrize("chunk", [1, 2, 3, 7])
+def test_multibyte_char_split_across_chunks_is_not_an_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, chunk: int
+) -> None:
+    monkeypatch.setattr(license_file, "_CHUNK", chunk)
+    assert inspect_file(write_csv(tmp_path / "a.csv")).encoding == "cp949"
+    assert inspect_file(write_csv(tmp_path / "b.csv", encoding="utf-8")).encoding == "utf-8-sig"
+
+
+def test_file_cut_in_the_middle_of_a_char_is_rejected(tmp_path: Path) -> None:
+    path = tmp_path / "a.csv"
+    path.write_bytes("관리번호".encode("cp949")[:-1])
+    with pytest.raises(LicenseFileError, match="인코딩"):
+        inspect_file(path)
+
+
+def test_cli_has_no_incremental_mode(capsys: pytest.CaptureFixture[str]) -> None:
+    """갱신은 월 1회 전체 적재 (ADR-025)."""
+    with pytest.raises(SystemExit) as exit_info:
+        ingest_licenses.main(["--mode", "incremental", "--type", "bakery", "--file", "x.csv"])
+    assert exit_info.value.code == 2
     assert "incremental" in capsys.readouterr().err
 
 
-def test_cli_requires_file_for_full_mode(capsys: pytest.CaptureFixture[str]) -> None:
-    assert ingest_licenses.main(["--mode", "full", "--type", "bakery"]) == 2
+def test_cli_requires_file(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        ingest_licenses.main(["--mode", "full", "--type", "bakery"])
+    assert exit_info.value.code == 2
     assert "--file" in capsys.readouterr().err
