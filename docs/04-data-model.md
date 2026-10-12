@@ -1,6 +1,6 @@
 # 04. 데이터 모델 (PostgreSQL 16 + PostGIS)
 
-> 마이그레이션은 Alembic으로만. §2 = `0001_location`(T-003), §3 = `0002_rules`(T-005). 아래 DDL은 기준 명세이며, 구현 시 이름·타입·제약을 그대로 따른다. 변경은 이 문서를 먼저 고친다.
+> 마이그레이션은 Alembic으로만. §2 = `0001_location`(T-003) + `0003_normalize`(T-016: `license_record.no_fixed_place`, `closure_surge_day`), §3 = `0002_rules`(T-005). 아래 DDL은 기준 명세이며, 구현 시 이름·타입·제약을 그대로 따른다. 변경은 이 문서를 먼저 고친다.
 
 ## 1. 공통 규칙
 
@@ -71,8 +71,9 @@ CREATE TABLE license_record (
   floor_source      TEXT CHECK (floor_source IN ('jibun_tail','road_detail')),
   ho_list           TEXT[] NOT NULL DEFAULT '{}',
   geom              GEOMETRY(Point, 4326),
-  bulk_closure      BOOLEAN NOT NULL DEFAULT false,   -- ADR-020
+  bulk_closure      BOOLEAN NOT NULL DEFAULT false,   -- ADR-020. 그날의 관할 이름·건수는 closure_surge_day
   stale_suspect     BOOLEAN NOT NULL DEFAULT false,   -- ADR-023
+  no_fixed_place    BOOLEAN NOT NULL DEFAULT false,   -- 고정된 자리가 없는 업태(docs/10 §1.1). 자리 이력·통계에서 제외
   source_updated_at TIMESTAMPTZ,
   last_snapshot_id  BIGINT REFERENCES data_snapshot(id),
   parse_version     TEXT NOT NULL,
@@ -82,6 +83,17 @@ CREATE TABLE license_record (
 CREATE INDEX license_record_floor_idx ON license_record (pnu, floor);
 CREATE INDEX license_record_geom_idx  ON license_record USING GIST (geom);
 CREATE INDEX license_record_closed_idx ON license_record (jurisdiction_code, closed_on) WHERE status = 'closed';
+
+-- 폐업 처리 급증일 (docs/10 §5, ADR-020). 정규화할 때마다 전체를 다시 만든다
+CREATE TABLE closure_surge_day (
+  jurisdiction_code  TEXT NOT NULL,
+  closed_on          DATE NOT NULL,
+  jurisdiction_label TEXT,               -- '마포구'. 그 관할 기록의 주소에 가장 많이 나온 시군구 이름, 정할 수 없으면 NULL
+  closure_count      INT NOT NULL,       -- c(j, d): 그날 그 관할의 폐업 건수 (식품 3종 합산)
+  median_daily       NUMERIC(8,1) NOT NULL,  -- m(j): 관할의 하루 폐업 건수 중앙값
+  parse_version      TEXT NOT NULL,
+  PRIMARY KEY (jurisdiction_code, closed_on)
+);
 
 -- 필지(PNU) 요약 — 자리 페이지 1단계
 CREATE TABLE parcel (
