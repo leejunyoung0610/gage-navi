@@ -218,6 +218,7 @@
 
 ### T-033 필지 · 층 이력 페이지 ⏱6h
 - **할 일**: `/place/[pnu]`, `/place/[pnu]/[floor]` (SSR+ISR), `FloorTimeline`, `BaseRateCard`, notices, 정정 요청 시트, "이 자리로 정책자금 알아보기"(`profile-store`에 `region.sido_code`, `region.sigungu_code` 저장)
+  - 화면에 면적 단위를 표시하기 전에 `소재지면적`의 단위를 확인한다(🔎 docs/03 D1 — 파일에 단위 표기가 없고, T-016에서는 값 분포만 봤다). 확인 전에는 면적을 단위와 함께 내보내지 않는다
 - **수용 기준**
   - [ ] 기준율 표시·숨김 두 상태 스냅샷 테스트
   - [ ] 같은 호수 그룹 색 일치
