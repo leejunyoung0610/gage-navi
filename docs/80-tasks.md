@@ -202,6 +202,7 @@
 
 ### T-022 장소 API ⏱4h
 - **할 일**: `GET /places/{pnu}`, `GET /places/{pnu}/floors/{floor}` (docs/30). 기준율 선택(시군구 n≥200이면 주, 아니면 서울), 기준선(버킷 0), notices(docs/10 §7.1 조건표), 숨김 기록 제외
+  - 층 규모(T-019b): `floor_summary.max_concurrent` → `base_rate.floor_scale`. 기준율·기준선은 그 규모의 `base_rate` 행에서 고른다(`floor_scale='all'` 행은 쓰지 않는다). 최신 모형 카드의 `by_floor_scale.{규모}.holds`가 거짓이면 `display=false`, `hidden_reason="not_confirmed_for_floor_scale"`(docs/30, docs/10 §7.3). 시드 DB 통합 테스트에 유지된 규모·깨진 규모를 각각 넣는다
   - `bulk_closure=true`인 기록에 그날의 관할 이름과 건수를 함께 내보낸다("폐업 처리 몰린 날" 배지 설명, docs/40 §4.4). 응답 필드는 docs/30을 먼저 고친다
   - 필지 응답에 층을 알 수 없는 기록 목록 `history_without_floor`를 넣는다(docs/30, docs/10 §7.1). 층 정보가 하나도 없는 필지(50,066곳)도 정상 응답. 한 필지에 최대 617건이라 응답 크기 제한이 필요한지 정한다
 - **수용 기준**
@@ -245,6 +246,7 @@
 ### T-033 필지 · 층 이력 페이지 ⏱6h
 - **할 일**: `/place/[pnu]`, `/place/[pnu]/[floor]` (SSR+ISR), `FloorTimeline`, `BaseRateCard`, notices, 정정 요청 시트, "이 자리로 정책자금 알아보기"(`profile-store`에 `region.sido_code`, `region.sigungu_code` 저장)
   - 필지 페이지에 "층을 알 수 없는 기록" 타임라인(상호·업태·기간·배지, 기준율 카드 없음, docs/40 §4.3). 층이 1개여도 층 미상 기록이 있으면 층 페이지로 바로 넘기지 않는다
+  - 기준율 카드에 층 규모 문구(`{scale_label}`)를 넣고, `hidden_reason="not_confirmed_for_floor_scale"`이면 카드 대신 "이 규모의 자리에서는 차이가 확인되지 않았어요"를 표시한다(T-019b, docs/40 §4.4). 스냅샷 테스트에 이 상태를 더한다
   - 화면에 면적 단위를 표시하기 전에 `소재지면적`의 단위를 확인한다(🔎 docs/03 D1 — 파일에 단위 표기가 없고, T-016에서는 값 분포만 봤다). 확인 전에는 면적을 단위와 함께 내보내지 않는다
 - **수용 기준**
   - [ ] 기준율 표시·숨김 두 상태 스냅샷 테스트
