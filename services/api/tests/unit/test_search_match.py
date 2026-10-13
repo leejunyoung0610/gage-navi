@@ -11,8 +11,10 @@ import pytest
 from app.address.juso import KEYWORD_ERROR_CODES, JusoUnavailableError
 from app.address.search_match import (
     CALL_INTERVAL_SECONDS,
+    FAILURE_OUTCOMES,
     HOLD_RATE,
     JIBUN_CHANGED,
+    JUDGED_MATCH,
     KEYWORD_ERROR,
     MATCH,
     MULTI_PARCEL,
@@ -253,7 +255,7 @@ def test_mismatch_is_reclassified_with_related_lots() -> None:
     first = body([juso_row("48", "0")])
     related = body([juso_row("48", "0", relJibun="서울특별시 가상구 다른동 1,가상동 3-2,47-1")])
     outcomes, fetch = run_measure([RECORD], [first, related])
-    assert outcomes == [MULTI_PARCEL]  # 관련지번에 있어도 일치로 바꾸지 않는다
+    assert outcomes == [MULTI_PARCEL]  # 판정용에서는 일치, 참고용에서는 불일치 (docs/50 §7)
     assert [(k, a) for _, k, _, a in fetch.calls] == [(KEYWORD, False), (KEYWORD, True)]
 
 
@@ -324,7 +326,7 @@ def test_verdict(matched: int, remeasure: bool, expected: str) -> None:
 
 def test_render_report() -> None:
     other_gu = dataclasses.replace(RECORD, sigungu_code="11440", opened_year=None)
-    results = [MATCH] * 7 + [NO_RESULT, MULTI_PARCEL, KEYWORD_ERROR]
+    results = [MATCH] * 6 + [MULTI_PARCEL, NO_RESULT, MULTI_PARCEL, KEYWORD_ERROR]
     outcomes = [Outcome(RECORD if i % 2 else other_gu, name) for i, name in enumerate(results)]
     report = render_report(
         outcomes,
@@ -342,17 +344,26 @@ def test_render_report() -> None:
             gu_names={"11215": "가상구", "11440": "나상구"},
         ),
     )
-    low, high = wilson_ci(7, 10)
-    assert "- **검색 일치율: 70.00%** (7 / 10)" in report
-    assert f"{(low * 100):.2f}% ~ {(high * 100):.2f}%" in report
+    low, high = wilson_ci(8, 10)
+    # 판정용: 대표 지번 일치 6 + 관련지번으로만 일치 2
+    assert "- **판정용 일치율: 80.00%** (8 / 10)" in report
+    assert f"- Wilson 95% 신뢰구간: {(low * 100):.2f}% ~ {(high * 100):.2f}%" in report
     assert "- PNU 성공률: 99.00% (990 / 1,000" in report
-    assert "- 종단 값(PNU 성공률 × 검색 일치율): 69.30%" in report
+    assert "- 종단 값(PNU 성공률 × 판정용 일치율): 79.20%" in report
     assert "- **판정: Gate 1 보류**" in report
+    assert "- 참고용 일치율(대표 지번만으로 일치): 60.00% (6 / 10)" in report
+    assert "- 두 값의 차이(관련지번으로만 일치): 2건 (20.00%)" in report
     assert "| 결과 없음 | 1 | 10.00% |" in report
-    assert "| 여러 필지 건물 | 1 | 10.00% |" in report
     assert "| 검색어 오류 | 1 | 10.00% |" in report
     assert "| 지번 변경 (추정) | 0 | 0.00% |" in report
-    assert "| 합계 | 3 | 30.00% |" in report
+    assert "| 합계 | 2 | 20.00% |" in report
+    assert "| 여러 필지 건물" not in report  # 판정용에서는 실패가 아니다
     assert "| 가상구 | 5 | " in report and "| 나상구 | 5 | " in report
     assert "| 2016~2020 | 5 | " in report and "| 개업일 없음 | 5 | " in report
     assert "가상로" not in report and "가상-00001" not in report  # 주소·관리번호는 싣지 않는다
+
+
+def test_judged_match_includes_related_lot_match() -> None:
+    # 사전 등록 정의: 건물 하나가 여러 필지면 그중 하나가 같으면 일치 (docs/50 §7)
+    assert JUDGED_MATCH == {MATCH, MULTI_PARCEL}
+    assert MULTI_PARCEL not in FAILURE_OUTCOMES and MATCH not in FAILURE_OUTCOMES

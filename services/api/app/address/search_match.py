@@ -72,13 +72,15 @@ NO_RESULT = "no_result"
 MULTI_PARCEL = "multi_parcel_building"
 JIBUN_CHANGED = "jibun_changed"
 OTHER = "other"
-# 실패 유형 (docs/50 §7 표의 순서)
-FAILURE_OUTCOMES = (KEYWORD_ERROR, TRANSPORT_ERROR, NO_RESULT, MULTI_PARCEL, JIBUN_CHANGED, OTHER)
+# 판정용 일치(사전 등록 정의): 대표 지번이 같거나 관련지번에 있다. 참고용 일치: 대표 지번만
+JUDGED_MATCH = frozenset({MATCH, MULTI_PARCEL})
+# 판정용 일치율에서 실패인 유형 (docs/50 §7 표의 순서)
+FAILURE_OUTCOMES = (KEYWORD_ERROR, TRANSPORT_ERROR, NO_RESULT, JIBUN_CHANGED, OTHER)
 OUTCOME_LABELS = {
     KEYWORD_ERROR: "검색어 오류",
     TRANSPORT_ERROR: "통신 오류",
     NO_RESULT: "결과 없음",
-    MULTI_PARCEL: "여러 필지 건물",
+    MULTI_PARCEL: "여러 필지 건물 (관련지번으로만 일치)",
     JIBUN_CHANGED: "지번 변경 (추정)",
     OTHER: "기타",
 }
@@ -281,12 +283,17 @@ def _rate_cells(matched: int, total: int) -> str:
 
 
 def _group_table(title: str, groups: dict[str, list[Outcome]], order: Sequence[str]) -> list[str]:
-    lines = [f"| {title} | 표본 | 일치 | 일치율 | Wilson 95% |", "|---|---|---|---|---|"]
+    lines = [
+        f"| {title} | 표본 | 일치(판정용) | 판정용 일치율 | Wilson 95% | 참고용 일치율 |",
+        "|---|---|---|---|---|---|",
+    ]
     for name in order:
         rows = groups.get(name, [])
         if rows:
-            matched = sum(1 for row in rows if row.outcome == MATCH)
-            lines.append(f"| {name} | {_rate_cells(matched, len(rows))} |")
+            matched = sum(1 for row in rows if row.outcome in JUDGED_MATCH)
+            primary = sum(1 for row in rows if row.outcome == MATCH)
+            reference = _percent(Decimal(primary) / len(rows))
+            lines.append(f"| {name} | {_rate_cells(matched, len(rows))} | {reference} |")
     return lines
 
 
@@ -307,9 +314,12 @@ class ReportContext:
 
 def render_report(outcomes: Sequence[Outcome], ctx: ReportContext) -> str:
     total = len(outcomes)
-    matched = sum(1 for row in outcomes if row.outcome == MATCH)
+    matched = sum(1 for row in outcomes if row.outcome in JUDGED_MATCH)
+    primary = sum(1 for row in outcomes if row.outcome == MATCH)
     rate = Decimal(matched) / Decimal(total)
+    primary_rate = Decimal(primary) / Decimal(total)
     low, high = wilson_ci(matched, total)
+    primary_low, primary_high = wilson_ci(primary, total)
     pnu_rate = Decimal(ctx.records_with_pnu) / Decimal(ctx.records_total)
     by_gu: dict[str, list[Outcome]] = {}
     by_band: dict[str, list[Outcome]] = {}
@@ -320,7 +330,8 @@ def render_report(outcomes: Sequence[Outcome], ctx: ReportContext) -> str:
     lines = [
         "# 검색 일치율 (T-021b, docs/50 §7 사전 등록 기준)",
         "",
-        "`python -m jobs.measure_search_match`가 만든 파일이다. 손으로 고치지 않는다.",
+        "`python -m jobs.measure_search_match`가 잰 건별 결과를 "
+        "`python -m jobs.render_search_match`가 집계해 만든 파일이다. 손으로 고치지 않는다.",
         "",
         f"- 측정일: {ctx.measured_on}",
         f"- 기준을 커밋한 날짜(커밋): {ctx.criteria_commit}",
@@ -330,24 +341,36 @@ def render_report(outcomes: Sequence[Outcome], ctx: ReportContext) -> str:
         + (" (재측정)" if ctx.remeasure else "")
         + ' — `sha256("{seed}:{license_type}:{mgmt_no}")` 16진 문자열 오름차순으로 앞에서부터',
         "- 검색어: 도로명주소의 첫 쉼표 또는 첫 여는 괄호 앞까지 → 프록시와 같은 검색어 정제. "
-        "첫 페이지 10건의 후보 PNU 중 기록의 PNU가 있으면 일치",
+        "첫 페이지 10건의 후보를 본다",
+        "- 일치(판정용, 사전 등록 정의): 후보의 대표 지번이 기록의 PNU와 같거나, "
+        "후보의 관련지번에 기록의 지번이 있다. 참고용: 대표 지번만",
         f"- 호출: 1초에 1건 순차, 통신 오류 재시도 {TRANSPORT_RETRIES}번. "
         f"도로명주소 API 호출 {ctx.calls:,}번(불일치 분류용 다시 조회 포함)",
         f"- 접근 문제로 멈춘 실행: {ctx.stopped_runs}",
         "",
         "## 결과",
         "",
-        f"- **검색 일치율: {_percent(rate)}** ({matched:,} / {total:,})",
+        f"- **판정용 일치율: {_percent(rate)}** ({matched:,} / {total:,})",
         f"- Wilson 95% 신뢰구간: {_percent(low)} ~ {_percent(high)}",
         f"- PNU 성공률: {_percent(pnu_rate)} ({ctx.records_with_pnu:,} / {ctx.records_total:,}, "
         "`license_record` 전체 중 PNU가 있는 기록)",
-        f"- 종단 값(PNU 성공률 × 검색 일치율): {_percent(pnu_rate * rate)}",
+        f"- 종단 값(PNU 성공률 × 판정용 일치율): {_percent(pnu_rate * rate)}",
         f"- **판정: {verdict(matched, total, remeasure=ctx.remeasure)}**"
-        " (95% 이상 통과 / 90% 이상 95% 미만 / 90% 미만, 점추정 기준)",
+        " (95% 이상 통과 / 90% 이상 95% 미만 / 90% 미만, 판정용 일치율의 점추정 기준)",
+        "",
+        "### 참고용 (판정에 쓰지 않는다)",
+        "",
+        f"- 참고용 일치율(대표 지번만으로 일치): {_percent(primary_rate)} "
+        f"({primary:,} / {total:,}), "
+        f"Wilson 95% {_percent(primary_low)} ~ {_percent(primary_high)} "
+        "— 지금 화면에서 검색 결과를 눌러 바로 이력을 보게 되는 비율",
+        f"- 두 값의 차이(관련지번으로만 일치): {matched - primary:,}건 "
+        f"({_percent(Decimal(matched - primary) / total)})",
         "",
         "## 실패 유형별",
         "",
-        "유형의 정의는 docs/50 §7. 위에서부터 처음 맞는 유형 하나로 센다.",
+        "판정용 일치율에서 일치하지 않은 건이다. 유형의 정의는 docs/50 §7. "
+        "위에서부터 처음 맞는 유형 하나로 센다.",
         "",
         "| 유형 | 건수 | 표본 대비 |",
         "|---|---|---|",
