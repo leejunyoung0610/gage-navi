@@ -1,0 +1,100 @@
+{
+  "source": "https://business.juso.go.kr/addrlink/addrLinkApi.do",
+  "recorded_on": "2026-10-13",
+  "request": {
+    "keyword": "서울특별시 광진구 능동로 120",
+    "currentPage": 1,
+    "countPerPage": 10
+  },
+  "response": {
+    "results": {
+      "common": {
+        "countPerPage": "10",
+        "errorMessage": "정상",
+        "errorCode": "0",
+        "totalCount": "3",
+        "currentPage": "1"
+      },
+      "juso": [
+        {
+          "siNm": "서울특별시",
+          "lnbrMnnm": "1",
+          "bdKdcd": "0",
+          "jibunAddr": "서울특별시 광진구 화양동 1 건국대학교",
+          "buldSlno": "0",
+          "bdMgtSn": "1121510700100010000011337",
+          "zipNo": "05029",
+          "roadAddr": "서울특별시 광진구 능동로 120 (화양동)",
+          "admCd": "1121510700",
+          "liNm": "",
+          "bdNm": "건국대학교",
+          "mtYn": "0",
+          "rnMgtSn": "112153104007",
+          "roadAddrPart2": " (화양동)",
+          "sggNm": "광진구",
+          "buldMnnm": "120",
+          "roadAddrPart1": "서울특별시 광진구 능동로 120",
+          "emdNm": "화양동",
+          "lnbrSlno": "0",
+          "engAddr": "120 Neungdong-ro, Gwangjin-gu, Seoul",
+          "udrtYn": "0",
+          "rn": "능동로",
+          "detBdNmList": "수의과대학및부속동물병원, 입학정보관, 체육광장 야외화장실, 제2학생회관, 온실, 건축관 별관, 신공학관, 미래에너지관, 산학협동관, 예술문화대학, 여학생생활관, 축산대생활관, 쿨하우스 교육연수원, 생명과학관, 동물생명과학관, 쿨하우스 글로벌홀, 공예관가스실, 인문학관, 법학관, 부동산학관, 학생회관, 우체국, 교육과학관, 상허연구관, 변전실, 체육관, 체육부생활관, 공학관, 의생명과학연구관, 상허기념도서관, 사범대학 부속고등학교, 사범대학 부속고등학교",
+          "emdNo": "04"
+        },
+        {
+          "siNm": "서울특별시",
+          "lnbrMnnm": "4",
+          "bdKdcd": "0",
+          "jibunAddr": "서울특별시 광진구 화양동 4-12 건국대학교병원",
+          "buldSlno": "1",
+          "bdMgtSn": "1121510700100010000016506",
+          "zipNo": "05030",
+          "roadAddr": "서울특별시 광진구 능동로 120-1 (화양동)",
+          "admCd": "1121510700",
+          "liNm": "",
+          "bdNm": "건국대학교병원",
+          "mtYn": "0",
+          "rnMgtSn": "112153104007",
+          "roadAddrPart2": " (화양동)",
+          "sggNm": "광진구",
+          "buldMnnm": "120",
+          "roadAddrPart1": "서울특별시 광진구 능동로 120-1",
+          "emdNm": "화양동",
+          "lnbrSlno": "12",
+          "engAddr": "120-1 Neungdong-ro, Gwangjin-gu, Seoul",
+          "udrtYn": "0",
+          "rn": "능동로",
+          "detBdNmList": "",
+          "emdNo": "04"
+        },
+        {
+          "siNm": "서울특별시",
+          "lnbrMnnm": "249",
+          "bdKdcd": "0",
+          "jibunAddr": "서울특별시 광진구 능동 249-14",
+          "buldSlno": "0",
+          "bdMgtSn": "1121510200102490014006294",
+          "zipNo": "04987",
+          "roadAddr": "서울특별시 광진구 능동로34길 120 (능동)",
+          "admCd": "1121510200",
+          "liNm": "",
+          "bdNm": "",
+          "mtYn": "0",
+          "rnMgtSn": "112154112144",
+          "roadAddrPart2": " (능동)",
+          "sggNm": "광진구",
+          "buldMnnm": "120",
+          "roadAddrPart1": "서울특별시 광진구 능동로34길 120",
+          "emdNm": "능동",
+          "lnbrSlno": "14",
+          "engAddr": "120 Neungdong-ro 34-gil, Gwangjin-gu, Seoul",
+          "udrtYn": "0",
+          "rn": "능동로34길",
+          "detBdNmList": "",
+          "emdNo": "01"
+        }
+      ]
+    }
+  }
+}

@@ -57,8 +57,8 @@
 |---|---|
 | 제공 | 행정안전부 도로명주소 개발자센터, 승인키(`confmKey`) 필요 |
 | 용도 | 사용자 주소 입력 → 지번 정보 → PNU |
-| 사용 필드 🔎 T-021 | `roadAddr`, `jibunAddr`, `admCd`(법정동코드 10자리), `mtYn`(산 여부), `lnbrMnnm`(본번), `lnbrSlno`(부번), `bdMgtSn`(건물관리번호), `bdNm` |
-| 호출 정책 | 서버 프록시 경유만(키 노출 금지), 동일 질의 24시간 캐시 |
+| 사용 필드 | `roadAddr`, `jibunAddr`, `admCd`(법정동코드 10자리 — 가이드 표기는 "행정구역코드"), `mtYn`(산 여부, `0` 대지 / `1` 산), `lnbrMnnm`(본번), `lnbrSlno`(부번, 없으면 `0`), `bdMgtSn`(건물관리번호), `bdNm`(건물명, 없으면 빈 문자열). 값은 모두 문자열. T-021에서 실제 응답 7건으로 확인(2026-10-13, 녹화 픽스처 `services/api/tests/fixtures/http/juso/`, 계약 테스트 `test_juso_contract.py`) |
+| 호출 정책 | 서버 프록시 경유만(키 노출 금지), 승인키·검색어는 POST 본문으로, 호출 전 검색어 정제, 동일 질의 24시간 캐시. 이용 조건은 `data/README.md` "도로명주소 검색 API 이용 조건" |
 
 ### D5. 지도
 

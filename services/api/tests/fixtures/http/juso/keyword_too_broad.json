@@ -1,0 +1,21 @@
+{
+  "source": "https://business.juso.go.kr/addrlink/addrLinkApi.do",
+  "recorded_on": "2026-10-13",
+  "request": {
+    "keyword": "서울특별시",
+    "currentPage": 1,
+    "countPerPage": 10
+  },
+  "response": {
+    "results": {
+      "common": {
+        "countPerPage": "10",
+        "errorMessage": "주소를 상세히 입력해 주시기 바랍니다.",
+        "errorCode": "E0006",
+        "totalCount": "0",
+        "currentPage": "1"
+      },
+      "juso": null
+    }
+  }
+}

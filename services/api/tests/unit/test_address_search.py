@@ -195,8 +195,12 @@ def test_search_keyword_is_not_logged(
 
         monkeypatch.setattr(db, "existing_parcels", broken)
         client.get(URL, params={"q": f"{marker} 가상로 14"})
+    # `httpx2` 로거의 기록은 테스트 클라이언트가 찍은 자기 요청 URL이라 뺀다(서버 로그가 아니다).
+    # 서버가 도로명주소 API로 보내는 요청 URL에 검색어가 없다는 것은 test_juso.py가 본다.
     logged = "\n".join(
-        f"{record.getMessage()} {record.args!r} {record.__dict__!r}" for record in caplog.records
+        f"{record.getMessage()} {record.args!r} {record.__dict__!r}"
+        for record in caplog.records
+        if not record.name.startswith("httpx2")
     )
     assert marker not in logged and "7391" not in logged
 
