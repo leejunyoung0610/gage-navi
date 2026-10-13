@@ -70,6 +70,7 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-rs"  # skip 사유를 요약에 출력한다 (docs/50 §3)
 pythonpath = ["."]
 
 [tool.importlinter]
