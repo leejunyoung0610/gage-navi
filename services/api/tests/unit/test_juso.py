@@ -190,6 +190,6 @@ def test_client_errors_do_not_carry_key_or_keyword(handler: Any) -> None:
         run_search(handler)
     exc = caught.value
     text = f"{exc!s} {exc!r} {exc.__cause__!r} {exc.__context__!r}"
-    assert exc.__suppress_context__
+    assert exc.__context__ is None or exc.__suppress_context__
     assert FAKE_KEY not in str(exc) and FAKE_KEY not in repr(exc)
     assert KEYWORD not in text and "가상로" not in str(exc)

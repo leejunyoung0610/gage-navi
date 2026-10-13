@@ -1,0 +1,48 @@
+{
+  "source": "https://business.juso.go.kr/addrlink/addrLinkApi.do",
+  "recorded_on": "2026-10-13",
+  "request": {
+    "keyword": "서울특별시 마포구 성암로 301",
+    "currentPage": 1,
+    "countPerPage": 10
+  },
+  "response": {
+    "results": {
+      "common": {
+        "countPerPage": "10",
+        "errorMessage": "정상",
+        "errorCode": "0",
+        "totalCount": "1",
+        "currentPage": "1"
+      },
+      "juso": [
+        {
+          "siNm": "서울특별시",
+          "lnbrMnnm": "1595",
+          "bdKdcd": "0",
+          "jibunAddr": "서울특별시 마포구 상암동 1595 한국지역정보개발원(KLID Tower)",
+          "buldSlno": "0",
+          "bdMgtSn": "1144012700115950000000001",
+          "zipNo": "03923",
+          "roadAddr": "서울특별시 마포구 성암로 301 (상암동)",
+          "admCd": "1144012700",
+          "liNm": "",
+          "bdNm": "한국지역정보개발원(KLID Tower)",
+          "mtYn": "0",
+          "rnMgtSn": "114403113012",
+          "roadAddrPart2": " (상암동)",
+          "sggNm": "마포구",
+          "buldMnnm": "301",
+          "roadAddrPart1": "서울특별시 마포구 성암로 301",
+          "emdNm": "상암동",
+          "lnbrSlno": "0",
+          "engAddr": "301 Seongam-ro, Mapo-gu, Seoul",
+          "udrtYn": "0",
+          "rn": "성암로",
+          "detBdNmList": "한국지역정보개발원",
+          "emdNo": "03"
+        }
+      ]
+    }
+  }
+}

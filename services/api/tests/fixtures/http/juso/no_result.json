@@ -1,0 +1,21 @@
+{
+  "source": "https://business.juso.go.kr/addrlink/addrLinkApi.do",
+  "recorded_on": "2026-10-13",
+  "request": {
+    "keyword": "가나다라마바사 99999",
+    "currentPage": 1,
+    "countPerPage": 10
+  },
+  "response": {
+    "results": {
+      "common": {
+        "countPerPage": "10",
+        "errorMessage": "정상",
+        "errorCode": "0",
+        "totalCount": "0",
+        "currentPage": "1"
+      },
+      "juso": []
+    }
+  }
+}
