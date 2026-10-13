@@ -10,6 +10,7 @@ import pandas as pd
 from app.location.history.build import (
     max_concurrent,
     max_concurrent_at_open,
+    open_others_at_open,
     scale_of,
     statistical,
     visible,
@@ -31,6 +32,11 @@ def scale_at_open(records: pd.DataFrame, as_of: date) -> "pd.Series[str]":
 def scale_full_history(records: pd.DataFrame, as_of: date) -> "pd.Series[str]":
     """기록마다: 기준일까지의 전체 이력으로 센 층 규모 (비교용 — 개업일 뒤의 일이 들어간다)."""
     return scale_of(max_concurrent(_floor_records(records), as_of))
+
+
+def has_open_neighbor(records: pd.DataFrame, as_of: date) -> "pd.Series[bool]":
+    """기록마다: 개업일에 같은 층에서 영업 중인 다른 점포가 있었는가 (사후 참고용)."""
+    return open_others_at_open(_floor_records(records), as_of) > 0
 
 
 def floor_record_count(records: pd.DataFrame) -> "pd.Series[int]":

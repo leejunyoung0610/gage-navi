@@ -42,9 +42,14 @@ LICENSE_LABELS = {
     "rest_restaurant": "휴게음식점",
     "bakery": "제과점영업",
 }
+# 판정이 깨진 규모의 화면 문구 (docs/40 §4.4)
+HIDDEN_MESSAGE = (
+    "이 정도 규모의 층에서는 과거 폐업 횟수와 폐업률의 관계가 검증 기준을 통과하지 못했어요"
+)
 _SUBSET_HEADER = [
-    "| {name} | n | 3년 내 폐업률 | 0 버킷 | 4+ 버킷 | 4+ n | 1회당 OR (95%) | (a) | (b) |",
-    "|---|---|---|---|---|---|---|---|---|",
+    "| {name} | n | 3년 내 폐업률 | 0 버킷 | 4+ 버킷 | 4+ n | 1회당 OR (95%) | OR에 쓴 n |"
+    " (a) | (b) |",
+    "|---|---|---|---|---|---|---|---|---|---|",
 ]
 
 
@@ -92,6 +97,7 @@ def _subset_row(label: str, result: SettingResult | ScaleResult) -> str:
     return (
         f"| {label} | {result.n:,} | {_pct(result.event_rate)} | {_rate(_bucket(result, '0'))} |"
         f" {_rate(four)} | {'—' if four is None else f'{four.n:,}'} | {_odds(result)} |"
+        f" {'—' if result.logit is None else f'{result.logit.n:,}'} |"
         f" {_mark(result.criterion_a)} | {_mark(result.criterion_b)} |"
     )
 
@@ -120,12 +126,19 @@ def _floor_scale_lines(card: ModelCardPayload) -> list[str]:
     )
     lines += ["", *(line.format(name="층 규모") for line in _SUBSET_HEADER)]
     lines += [_subset_row(SCALE_LABELS[name], getattr(scales, name)) for name in SCALES]
+    lines += [
+        "",
+        '"OR에 쓴 n"이 n보다 작은 것은 로지스틱 표본이 코호트 중 면적이 0보다 크고 시군구가 있는'
+        " 기록이기 때문이다(docs/10 §7.3). 버킷 기준율은 면적 조건 없이 n 전체로 낸다. 빠진 기록: "
+        + ", ".join(f"{SCALE_LABELS[name]} {_dropped(getattr(scales, name))}" for name in SCALES)
+        + ".",
+    ]
     failures = scale_failures(scales)
     lines.append("")
     if failures:
         lines.append(
             "**깨진 규모가 있다. 그 규모의 기준율은 `base_rate`에 쓰지 않았고, 화면은 카드 대신"
-            ' "이 규모의 자리에서는 차이가 확인되지 않았어요"를 표시한다.**'
+            f' "{HIDDEN_MESSAGE}"를 표시한다.**'
         )
         lines += [f"- {failure}" for failure in failures]
     else:
@@ -170,8 +183,61 @@ def _floor_scale_lines(card: ModelCardPayload) -> list[str]:
     return lines
 
 
+def _dropped(result: SettingResult | ScaleResult) -> str:
+    if result.logit is None or not result.n:
+        return "—"
+    gone = result.n - result.logit.n
+    return f"{gone:,}건({_pct(Decimal(gone) / Decimal(result.n))})"
+
+
+def _neighbor_lines(card: ModelCardPayload) -> list[str]:
+    reference, scales = card.single_with_open_neighbor, card.by_floor_scale
+    if reference is None or scales is None:
+        return []
+    lines = [
+        "",
+        "## 사후 참고(판정 불변): 단독으로 분류됐지만 개업일에 다른 점포가 영업 중이던 기록",
+        "",
+        "층 규모는 개업일에서 기간을 잘라 세므로, 가게 1곳이 영업 중인 층(둘이 30일 넘게 겹친 적"
+        ' 없음)에 새로 연 가게는 단독(1)이다. "개업일에 영업 중인 다른 점포" = 같은 층의 다른'
+        " 기록 중"
+        " `개업일 < 이 가게의 개업일 < 끝`(끝 = 폐업일, 영업 중이면 기준일)인 것. **결과를 본 뒤에"
+        " 더한 참고값이다. 층 규모 정의·판정·저장·화면은 바꾸지 않는다.**",
+        "",
+        f"- 단독 {reference.single_n:,}건 중 개업일에 영업 중인 다른 점포가 있던 기록:"
+        f" {reference.with_open_neighbor_n:,}건 ({_pct(reference.share)})",
+        "",
+        *(line.format(name="단독") for line in _SUBSET_HEADER),
+        _subset_row("전체 (판정에 쓴 값)", scales.single),
+        _subset_row("그 기록을 뺀 단독 (사후 참고)", reference.without_open_neighbor),
+    ]
+    return lines
+
+
+def _limit_lines(card: ModelCardPayload) -> list[str]:
+    scales = card.by_floor_scale
+    if scales is None:
+        return []
+    lines = ["", "## 한계", ""]
+    large, four = scales.large, _bucket(scales.large, "4+")
+    share = (
+        ""
+        if four is None or not large.n
+        else f" 대형 코호트 {large.n:,}건 중 {four.n:,}건"
+        f"({_pct(Decimal(four.n) / Decimal(large.n))})이 `4+` 버킷이다."
+    )
+    lines += [
+        '- 대형 층은 과거 폐업 횟수의 범위가 넓어 "1회당 OR"이 관계를 잘 담지 못할 수 있다'
+        f"(로지스틱은 과거 폐업 횟수를 5에서 자른다).{share}"
+        " **결과를 본 뒤 모형을 바꿔 판정을 다시 하지는 않는다.**",
+        "- 급증일 폐업·신고 지연 의심 기록의 폐업일은 실제보다 늦을 수 있고, 그만큼 동시에 영업한"
+        " 점포 수가 크게 세어질 수 있다(docs/10 §7.2).",
+    ]
+    return lines
+
+
 def _reference_lines(card: ModelCardPayload) -> list[str]:
-    lines: list[str] = []
+    lines: list[str] = _neighbor_lines(card)
     if card.sensitivity is not None:
         lines += ["", "## 참고: 인허가 종류별 (판정에 넣지 않는다)", ""]
         lines += [line.format(name="인허가 종류") for line in _SUBSET_HEADER]
@@ -304,6 +370,7 @@ def render(card: ModelCardPayload, method_version: str, saved: bool) -> str:
 
     lines += _floor_scale_lines(card)
     lines += _reference_lines(card)
+    lines += _limit_lines(card)
 
     lines += ["", "## 로지스틱 (기본 설정)", ""]
     if card.logit is None:
