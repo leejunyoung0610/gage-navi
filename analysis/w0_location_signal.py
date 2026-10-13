@@ -1,4 +1,5 @@
 """W0 자리 이력 신호 검증 (2026-10-08 실행본, 로직 수정 금지 — docs/10 §7.4 재현 기준)
+정정 2026-10-13 (T-020): 소재지면적의 천 단위 쉼표를 떼고 읽는다. 원 실행본은 쉼표가 든 면적 880건(1,000㎡ 이상 점포)을 숫자가 아닌 값으로 읽어 빠뜨렸다. 다른 로직은 그대로다.
 
 입력: 서울 일반음식점 인허가 CSV를 UTF-8로 변환한 파일
   iconv -f CP949 -t UTF-8 식품_일반음식점_서울특별시.csv > seoul.csv
@@ -45,7 +46,7 @@ for rx, pre in FLOOR:
 df['floor'] = fl
 df['ho'] = detail.str.extract(r'(\d+)\s*호')[0]
 df['U'] = np.where(df.B.notna() & df.floor.notna(), df.B.astype(str) + '|' + df.floor.astype(str), None)
-df['area'] = pd.to_numeric(df['소재지면적'], errors='coerce')
+df['area'] = pd.to_numeric(df['소재지면적'].str.replace(',', ''), errors='coerce')
 
 print('\n== 주소 품질 ==')
 print('구 파싱 %.1f%% | 건물키 %.1f%% | 층 %.1f%% | 호 %.1f%%' % tuple(100*x for x in (
