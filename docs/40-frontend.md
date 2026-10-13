@@ -154,6 +154,8 @@
 
 `address_search`, `place_view{floor_count}`, `floor_view{has_base_rate}`, `evidence_open{module}`, `methodology_open`, `wizard_step{module, step, unknown}`, `evaluate_submit{module}`, `evaluate_result{module, plan_count, unknown_count}`, `correction_submit`. 프로필 값·주소·금액은 이벤트에 넣지 않는다.
 
+순방문·재방문 집계(docs/70 §5): 첫 방문 때 브라우저에 무작위 방문자 ID를 저장한다. IP는 저장하지 않고 `/privacy`에 고지한다(docs/60 §5). 내부 표시를 켠 브라우저와 봇(User-Agent)은 세지 않는다. "도움이 됐나요" 클릭 이벤트와 구현은 제안 티켓 T-104.
+
 ## 11. 성능 예산
 
 - 층 페이지(모바일, 4G 가정): LCP < 2.5s, CLS < 0.1, JS < 170KB(gzip, 지도 SDK 제외 — 지도는 지연 로딩)
