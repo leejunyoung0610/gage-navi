@@ -1,6 +1,6 @@
 # 04. 데이터 모델 (PostgreSQL 16 + PostGIS)
 
-> 마이그레이션은 Alembic으로만. §2 = `0001_location`(T-003) + `0003_normalize`(T-016: `license_record.no_fixed_place`, `closure_surge_day`) + `0004_stale_area`(T-017: `license_record.stale_area_match`) + `0005_prior_ex_surge`(T-018: `record_prior.prior_closures_floor_ex_surge`), §3 = `0002_rules`(T-005). 아래 DDL은 기준 명세이며, 구현 시 이름·타입·제약을 그대로 따른다. 변경은 이 문서를 먼저 고친다.
+> 마이그레이션은 Alembic으로만. §2 = `0001_location`(T-003) + `0003_normalize`(T-016: `license_record.no_fixed_place`, `closure_surge_day`) + `0004_stale_area`(T-017: `license_record.stale_area_match`) + `0005_prior_ex_surge`(T-018: `record_prior.prior_closures_floor_ex_surge`) + `0006_floor_scale`(T-019b: `floor_summary.max_concurrent`, `record_prior.max_concurrent_at_open`, `base_rate.floor_scale`), §3 = `0002_rules`(T-005). 아래 DDL은 기준 명세이며, 구현 시 이름·타입·제약을 그대로 따른다. 변경은 이 문서를 먼저 고친다.
 
 ## 1. 공통 규칙
 
@@ -117,6 +117,7 @@ CREATE TABLE floor_summary (
   open_now_count    INT NOT NULL,
   median_closed_tenure_days INT,          -- 폐업 업소 영업기간 중앙값 (bulk 제외)
   has_concurrent    BOOLEAN NOT NULL,     -- 동시 영업 기록 존재 → "여러 점포" 안내
+  max_concurrent    INT NOT NULL CHECK (max_concurrent >= 1),  -- 기준일까지 동시에 영업한 최대 점포 수 → 화면의 층 규모 (docs/10 §7.1·§7.2)
   method_version    TEXT NOT NULL,
   PRIMARY KEY (pnu, floor)
 );
@@ -126,6 +127,7 @@ CREATE TABLE record_prior (
   record_id             BIGINT PRIMARY KEY REFERENCES license_record(id) ON DELETE CASCADE,
   prior_closures_floor  INT NOT NULL,          -- 같은 층키에서 개업일 전에 폐업한 기록 수 (급증일 폐업 포함)
   prior_closures_floor_ex_surge INT NOT NULL,  -- 그중 bulk_closure = true인 폐업을 뺀 수
+  max_concurrent_at_open INT NOT NULL CHECK (max_concurrent_at_open >= 1),  -- 개업일까지의 이력으로 센 동시 영업 최대 점포 수 → 통계의 층 규모 (docs/10 §7.2)
   method_version        TEXT NOT NULL,
   computed_at           TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -137,6 +139,7 @@ CREATE TABLE base_rate (
   method_version TEXT NOT NULL,
   scope_code     TEXT NOT NULL,            -- '11'(서울 전체) 또는 시군구 5자리
   license_group  TEXT NOT NULL DEFAULT 'food3',   -- MVP: 식품 3종 통합. 'general_restaurant' 등 개별은 n 충족 시
+  floor_scale    TEXT NOT NULL DEFAULT 'all' CHECK (floor_scale IN ('all','single','small','large')),  -- 층 규모 (docs/10 §7.2). 'all' = 규모로 나누지 않은 값. 판정이 깨진 규모의 행은 없다 (docs/10 §7.3)
   prior_bucket   TEXT NOT NULL CHECK (prior_bucket IN ('0','1','2','3','4+')),
   n              INT NOT NULL,
   events         INT NOT NULL,             -- 3년 내 폐업 수
@@ -146,7 +149,7 @@ CREATE TABLE base_rate (
   cohort_from    DATE NOT NULL,
   cohort_to      DATE NOT NULL,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (snapshot_label, method_version, scope_code, license_group, prior_bucket)
+  UNIQUE (snapshot_label, method_version, scope_code, license_group, floor_scale, prior_bucket)
 );
 
 -- 모형 카드 (방법론 페이지 데이터)

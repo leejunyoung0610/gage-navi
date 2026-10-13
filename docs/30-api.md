@@ -84,7 +84,7 @@
 {"data": {
   "pnu": "1121510700100470001", "floor": "1", "jibun_label": "서울특별시 광진구 화양동 47-1",
   "summary": {"record_count": 7, "records_since_2005": 5, "open_now_count": 1,
-              "median_closed_tenure_days": 812, "has_concurrent": false},
+              "median_closed_tenure_days": 812, "has_concurrent": false, "max_concurrent": 1},
   "history": [{
     "record_id": 1032, "name": "○○분식", "license_type": "general_restaurant", "biz_category": "분식",
     "opened_on": "2011-03-02", "closed_on": "2013-08-30", "status": "closed", "tenure_days": 912,
@@ -92,7 +92,7 @@
   }],
   "ho_groups": [{"ho": "101", "record_ids": [1032, 2210]}],
   "base_rate": {
-    "display": true, "hidden_reason": null,
+    "display": true, "hidden_reason": null, "floor_scale": "single",
     "prior_closures_now": 4, "bucket": "4+",
     "primary":   {"scope_code": "11215", "scope_label": "광진구", "rate": "0.4310", "ci": ["0.3920", "0.4710"], "n": 612},
     "baseline":  {"scope_code": "11215", "bucket": "0", "rate": "0.2950", "ci": ["0.2810", "0.3090"], "n": 4012},
@@ -103,7 +103,10 @@
   "data_as_of": "2026-11-01"
 }}
 ```
-- `display=false`이면 `hidden_reason = "insufficient_sample"`(해당 버킷 n < 200, 시군구·서울 모두)
+- `floor_scale`: 이 층의 규모 `single`(동시에 영업한 최대 점포 수 1) / `small`(2~9) / `large`(10 이상). `summary.max_concurrent`로 정한다(docs/10 §7.2). `primary`·`baseline`·`secondary`는 **이 규모의 기준율**(`base_rate.floor_scale`)이다 (T-019b, 응답 구현은 T-022)
+- `display=false`이면 `hidden_reason`은 둘 중 하나다. 이때 `primary`·`baseline`·`secondary`는 `null`
+  - `"not_confirmed_for_floor_scale"`: 이 규모에서 결론 유지 판정 (a)(b)가 깨졌다(최신 `model_card.payload.by_floor_scale.{규모}.holds = false`, docs/10 §7.3). 규모로 나누지 않은 값으로 대신하지 않는다. 이 값이 먼저다
+  - `"insufficient_sample"`: 이 규모의 해당 버킷 n < 200(시군구·서울 모두)
 - `notices` 값과 발생 조건: docs/10 §7.1
 - `stale_suspect`는 같은 호 근거만이다. 면적 근거 `stale_area_match`는 응답에 넣지 않는다 (docs/10 §6)
 - 숨김 처리된 기록(`record_suppression`)은 응답에서 제외

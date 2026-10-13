@@ -252,6 +252,7 @@ bulk(j, d) = c(j, d) >= 30 AND c(j, d) >= 10 * m(j)
   - `record_count`, `records_since_2005`(`opened_on ≥ 2005-01-01`), `open_now_count`(`status='open'`)
   - `median_closed_tenure_days` = `status='closed'`이고 개업일·폐업일이 있으며 `bulk_closure = false`인 기록의 `closed_on − opened_on` 중앙값(짝수 개면 가운데 두 값의 평균, 0.5는 올림). 해당 기록이 없으면 `NULL`
   - `has_concurrent`: 기록의 영업 기간 = `[opened_on, closed_on]`, 영업 중이면 `[opened_on, 기준일]`. 두 기록의 겹침 = `min(끝) − max(시작)`일. **30일을 넘는**(31일 이상) 쌍이 있으면 참. 개업일이 없거나, 폐업인데 폐업일이 없는 기록은 기간을 알 수 없으므로 이 판정에서 뺀다
+  - `max_concurrent`(T-019b): **그 층에서 기준일까지 동시에 영업한 최대 점포 수.** `has_concurrent`와 같은 기간·같은 제외로 센다 — 기록 k개의 영업 기간이 모두 함께 겹치는 길이(`min(끝) − max(시작)`)가 30일을 넘는 가장 큰 k. 기간을 아는 기록이 없으면 1(최소 1). 그래서 `has_concurrent = (max_concurrent ≥ 2)`다. 화면의 층 규모(§7.2)는 이 값으로 정한다
 - `record_prior`: §7.2의 `F`에서 개업일이 있는 기록마다 1행 (숨김 기록도 포함 — 통계용 값이다)
 - 측정(T-018, 2026-10 세 파일, 기준일 2026-10-07): 필지 157,898곳(층 정보가 하나도 없는 필지 50,066곳), 층키 148,604곳(동시 영업 있음 36,457곳), `record_prior` 382,601행. 급증일 폐업을 빼면 과거 폐업 횟수가 달라지는 기록은 31,248건(8.2%)이고, 그중 26,249건은 포함한 값이 4 이상인 기록이다. 빌드 약 10초(로컬)
 
@@ -290,6 +291,22 @@ bulk(j, d) = c(j, d) >= 30 AND c(j, d) >= 10 * m(j)
 - 결과: `event(r) = r.status='closed' AND r.closed_on − r.opened_on ≤ 1095일`
 - 버킷: `0, 1, 2, 3, 4+`
 - 범위: 서울 전체(`scope_code='11'`)와 시군구별
+- **층 규모** (T-019b, 2026-10-13 사용자 결정 — 결과를 보기 전에 정했다): 층키를 **그 층에서 동시에 영업한 최대 점포 수**로 나눈다
+
+  | 층 규모 (`floor_scale`) | 동시에 영업한 최대 점포 수 |
+  |---|---|
+  | `single` 단독 | 1 |
+  | `small` 소형 복수 | 2~9 |
+  | `large` 대형 | 10 이상 |
+
+  - **셈법**: 기록의 영업 기간 = `[opened_on, closed_on]`, 영업 중이면 `[opened_on, 기준일]`. 기록 k개가 "동시에 영업했다" = k개 기간이 모두 함께 겹치는 길이(`min(끝) − max(시작)`)가 **30일을 넘는다**(31일 이상). `has_concurrent`(§7.1)와 같은 기준이라, 가게가 바뀌면서 며칠 겹치는 것은 동시로 치지 않는다. (구간이므로 "모든 쌍이 30일 넘게 겹친다"와 같은 말이다)
+  - **빼는 기록**: 개업일이 없거나, 폐업인데 폐업일이 없는 기록은 셈에서 뺀다(`has_concurrent`와 같다). 급증일 폐업·미갱신 의심 기록은 빼지 않는다(`has_concurrent`와 같다) — 알려진 한계: 실제보다 늦게 적힌 폐업일은 동시 점포 수를 늘린다
+  - **통계에서는 각 가게의 개업일까지의 이력만으로 센다** (`max_concurrent_at_open`). 기록 r(개업일 T)의 값 = `F`의 같은 층키 기록들의 영업 기간을 T에서 자른 뒤(`끝 = min(끝, T)`) 위 셈법으로 센 최댓값, 자기 자신 포함이라 최소 1. 전체 이력으로 세면 나중에 푸드코트가 된 층 같은 미래 정보가 통계에 새어 들어간다 — 과거 폐업 횟수를 개업 시점 기준으로 세는 것과 같은 원칙이다
+    - r 자신의 기간은 T에서 자르면 0일이라 누구와도 동시가 되지 않는다(2026-10-13 확인). 가게 1곳이 영업 중인 층(둘이 겹친 적 없음)에 새로 연 가게의 값은 1(단독)이다. 화면에서 그 층을 보는 사람도 1을 보므로 통계와 화면이 같은 값을 쓴다
+    - 같은 뜻의 계산식: `max(1, t ≤ T − 31일인 날 t 중 "opened_on ≤ t ≤ 끝 − 31일"인 기록 수의 최댓값)`
+  - **화면에서는 오늘(기준일)까지의 이력으로 센다**: `floor_summary.max_concurrent`(§7.1, 이력에 보이는 기록 `H`)
+  - **저장**: 화면용은 `floor_summary.max_concurrent`, 통계용은 `record_prior.max_concurrent_at_open`(`F`, 숨김 기록 포함 — 과거 폐업 횟수와 같다). 둘 다 `jobs.build_history`가 만든다. 규모별 기준율은 `base_rate.floor_scale`(`all`은 규모로 나누지 않은 값)
+  - **비교용 "전체 이력 기준"**: 같은 코호트를 `F`의 전체 이력(기준일까지, 개업일 뒤의 일 포함)으로 센 층 규모로 나눈 결과를 모형 카드(`by_floor_scale_full_history`)와 리포트에 함께 싣는다. 미래 정보를 넣으면 숫자가 얼마나 달라지는지 보려는 것이고, 판정과 화면에는 쓰지 않는다
 - 비율과 Wilson 95% 신뢰구간:
   ```
   p̂ = events/n,  z = 1.96
@@ -334,9 +351,13 @@ bulk(j, d) = c(j, d) >= 30 AND c(j, d) >= 10 * m(j)
     "convenience_store": {"excluded": {}, "included": {}},
     "exclude_stale": {"none": {}, "same_ho": {}, "same_ho_or_area": {}},
     "floor_unknown": {"all": {}, "exclude_parcels_with_floorless_closure": {}},
-    "bulk_as_censored": {}
+    "bulk_as_censored": {},
+    "license_type": {"general_restaurant": {}, "rest_restaurant": {}, "bakery": {}}
   },
-  "robustness": {"holds": true, "failures": []}
+  "robustness": {"holds": true, "failures": []},
+  "by_floor_scale": {"single": {}, "small": {}, "large": {}},
+  "by_floor_scale_full_history": {"single": {}, "small": {}, "large": {}},
+  "floor_record_count": {"four_plus": []}
 }
 ```
 (값은 W0 일반음식점 결과 예시. 실제 값은 식품 3종으로 재계산. `base_rates`는 서울 전체)
@@ -344,7 +365,7 @@ bulk(j, d) = c(j, d) >= 30 AND c(j, d) >= 10 * m(j)
 - 로지스틱 표본 = 코호트 중 `area_m2 > 0`이고 `sigungu_code`가 있는 기록(`logit.n`). 기준율 표는 면적 조건 없이 코호트 전체로 낸다
 - 다른 층 통제 변수 = 같은 필지(`pnu`, 층 미상 기록 포함)에서 개업일 전에 폐업한 기록 수 − 같은 층키의 과거 폐업 횟수, 0~20으로 자른 값. 세지 않는 폐업은 과거 폐업 횟수와 같다
 - `by_sigungu`·`out_of_time`·`with_other_floor_control`은 기본 설정에서만 계산한다. `by_sigungu`의 표준오차도 층키 클러스터다(W0 재현 모드는 W0 스크립트처럼 클러스터 없이)
-- `--method-version w0`(§7.4)는 `license_record`의 일반음식점 기록으로 계산해 `method_version='w0'`, `license_group='general_restaurant'`, 서울 전체(`scope_code='11'`)만 저장한다. 설정·민감도·판정은 없다(`default_setting`·`sensitivity`·`robustness`가 `null`)
+- `--method-version w0`(§7.4)는 `license_record`의 일반음식점 기록으로 계산해 `method_version='w0'`, `license_group='general_restaurant'`, 서울 전체(`scope_code='11'`)만 저장한다. 설정·민감도·판정은 없다(`default_setting`·`sensitivity`·`robustness`·`by_floor_scale`·`by_floor_scale_full_history`·`floor_record_count`가 `null`)
 
 **민감도 설정 (2026-10-13 결정)** — 전체 조합이 아니라 **기본 설정(§7.2)에서 한 번에 한 항목만 바꿔** 계산한다. 설정마다 결과 항목은 `{is_default, n, event_rate, buckets[{bucket, n, events, rate, ci}], logit{n, or_per_prior, ci, p}, criterion_a, criterion_b}` (버킷은 서울 전체)
 
@@ -387,6 +408,21 @@ bulk(j, d) = c(j, d) >= 30 AND c(j, d) >= 10 * m(j)
 - **모두 유지되면** 기본 설정의 기준율을 `base_rate`에 저장하고 화면 기준율 카드를 기본 설정으로 확정한다(`robustness.holds = true`)
 - **하나라도 깨지면** `base_rate`·`model_card`를 쓰지 않고 멈춘다. 잡은 어느 설정에서 (a)·(b) 중 무엇이 어떤 값으로 깨졌는지 출력하고 0이 아닌 코드로 끝난다. 화면 카드를 어떻게 할지는 사용자가 정한다
 - 설정별 표와 `4+` 버킷 폐업률이 설정마다 움직인 폭은 `reports/base_rates.md`에 적는다(판정과 상관없이 항상)
+
+**층 규모별 판정 (T-019b, 2026-10-13 — 결과를 보기 전에 적었다)**
+
+- 기본 설정의 코호트를 층 규모(§7.2, 개업일까지의 이력으로 센 `max_concurrent_at_open`)로 나누고, **규모마다 위 판정 기준 (a)(b)를 다시 적용한다.** (a)는 그 규모 안의 서울 전체 `0`·`4+` 버킷으로(어느 한 버킷에 기록이 없으면 거짓), (b)는 그 규모의 기록만으로 같은 사양·층키 클러스터 표준오차로 적합한 1회당 OR로 본다. 민감도 설정 6개는 규모별로 다시 돌리지 않는다
+- 결과 항목 `by_floor_scale.{single|small|large}` = `{n, event_rate, buckets[{bucket, n, events, rate, ci}], logit{n, or_per_prior, ci, p}, criterion_a, criterion_b, holds}` (`holds = criterion_a AND criterion_b`, 버킷은 서울 전체)
+- **유지된 규모**: 그 규모의 기준율을 `base_rate`(`floor_scale` = 그 규모, 서울 전체 + 시군구)에 저장한다. 화면 기준율 카드는 **그 층의 규모(`floor_summary.max_concurrent`)에 해당하는 규모의 값**을 쓴다. 표시 조건(`n ≥ 200`, 시군구 우선)과 기준선(`0` 버킷)도 같은 규모 안에서 본다
+- **깨진 규모**: 그 규모의 기준율은 `base_rate`에 저장하지 않고, 화면은 **기준율 카드를 보여주지 않고 "이 규모의 자리에서는 차이가 확인되지 않았어요"를 표시한다**(docs/40 §4.4, docs/30 `base_rate.hidden_reason = "not_confirmed_for_floor_scale"`). 규모로 나누지 않은 값(`floor_scale='all'`)으로 대신하지 않는다. 모형 카드에는 깨진 규모의 값도 그대로 싣는다(`holds = false`) — 방법론 페이지가 보여준다
+- 규모가 깨져도 잡은 멈추지 않는다(멈추는 것은 위 7개 설정의 판정이 깨졌을 때뿐이다). 잡은 어느 규모에서 (a)·(b) 중 무엇이 어떤 값으로 깨졌는지 출력하고 리포트에 적는다
+- `floor_scale='all'` 행(T-019의 서울 전체 + 시군구 값)은 그대로 저장한다. 방법론 페이지와 비교용이고 화면 기준율 카드는 쓰지 않는다
+
+**판정 밖 참고 항목 (T-019b, 2026-10-13 결정 — 결과를 보기 전에 정했다)**
+
+- **인허가 종류별** `sensitivity.license_type.{general_restaurant|rest_restaurant|bakery}`: 기본 설정의 코호트를 인허가 종류로 나눈 결과(과거 폐업 횟수는 그대로 식품 3종 `F`로 센다). 항목은 민감도 설정과 같고 (a)(b)의 참/거짓도 싣지만, **깨져도 저장을 막거나 카드를 숨기지 않는다** — 화면 카드는 식품 3종 통합(`license_group='food3'`)만 쓴다
+- **전체 이력 기준 층 규모** `by_floor_scale_full_history`: §7.2의 비교용. 항목은 `by_floor_scale`과 같다. 판정·저장·화면에 쓰지 않는다
+- **층 기록 수별 `4+` 버킷** `floor_record_count.four_plus` = `[{range, n, events, rate}]`: 기본 설정 `4+` 버킷을 그 층의 기록 수(`floor_summary.record_count`와 같은 셈: `H`의 층키 기록 수)로 나눈 값. 구간은 `1-10`, `11-20`, `21-50`, `51+`. T-019에서 한 번만 쟀던 "큰 층 비중"을 잡이 다시 계산한다
 
 ### 7.4 W0 재현 모드 (회귀 테스트용)
 
