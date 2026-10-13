@@ -336,18 +336,18 @@ bulk(j, d) = c(j, d) >= 30 AND c(j, d) >= 10 * m(j)
 ```json
 {
   "data": {"snapshot_label": "2026-11", "license_group": "food3", "as_of": "2026-11-01",
-           "cohort_from": "2005-01-01", "cohort_to": "2023-11-02", "n": 171077, "event_rate": 0.321},
+           "cohort_from": "2005-01-01", "cohort_to": "2023-11-02", "n": 171495, "event_rate": 0.321},
   "default_setting": {"bulk_exclusion": "surge_rule", "convenience_store": "excluded",
                       "exclude_stale": "none", "floor_unknown": "all"},
-  "base_rates": [{"bucket": "0", "n": 102466, "events": 29715, "rate": "0.2900", "ci": ["0.2872", "0.2928"]}],
+  "base_rates": [{"bucket": "0", "n": 102765, "events": 29742, "rate": "0.2894", "ci": ["0.2867", "0.2922"]}],
   "logit": {
     "spec": "event ~ min(prior,5) + 개업연도 + 업태(상위10+기타) + log(면적) + 시군구 + 지하여부 + 2층이상여부",
-    "se": "층키 클러스터", "n": 171077,
-    "or_per_prior": 1.075, "ci": [1.063, 1.087], "p": 2.0e-38,
+    "se": "층키 클러스터", "n": 171495,
+    "or_per_prior": 1.075, "ci": [1.064, 1.087], "p": 8.5e-39,
     "with_other_floor_control": {"or_per_prior": 1.090, "ci": [1.077, 1.103], "or_other_floor": 0.992}
   },
-  "by_sigungu": [{"sigungu": "중구", "n": 7369, "or": 1.197, "ci": [1.155, 1.239]}],
-  "out_of_time": {"train": "2005-2014", "test": "2015-2020", "auc_base": 0.6088, "auc_with_prior": 0.6108},
+  "by_sigungu": [{"sigungu": "중구", "n": 7400, "or": 1.197, "ci": [1.155, 1.239]}],
+  "out_of_time": {"train": "2005-2014", "test": "2015-2020", "auc_base": 0.6088, "auc_with_prior": 0.6109},
   "sensitivity": {
     "bulk_exclusion": {"none": {}, "surge_rule": {}, "w0_citywide_100": {}},
     "convenience_store": {"excluded": {}, "included": {}},
