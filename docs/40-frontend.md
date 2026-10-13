@@ -44,6 +44,7 @@
 ### 4.2 주소 검색 (컴포넌트 `AddressSearch`)
 - 입력 300ms 디바운스, 2자 이상에서 호출, 결과 최대 10개
 - "현재 위치로 찾기" 버튼(Geolocation 권한 요청 → `/address/reverse`), 권한 거부 시 버튼 숨김
+- "지도에서 고르기" 버튼: 지도(카카오, 지연 로딩)에서 한 점을 찍으면 그 좌표로 `/address/reverse`를 호출해 "현재 위치로 찾기"와 같은 결과를 보여준다. 위치 권한이 필요 없다. **새 API를 만들지 않는다** — `/address/reverse`는 좌표에 해당하는 주소 1건을 돌려주므로(docs/30 §2) 결과도 근처 목록이 아니라 1건이다. 원하는 건물이 아니면 다시 찍는다. 주소 검색 결과가 없거나 오류일 때도 이 버튼을 안내한다
 - 결과 항목: 도로명 + 지번 + 건물명, `has_history=false`면 회색 + "식품 업소 기록 없음"
 - 상태: 로딩(스켈레톤 3줄), 결과 없음("주소를 조금 더 자세히 입력해 주세요"), 오류(재시도 버튼)
 
@@ -154,7 +155,7 @@
 
 `address_search`, `place_view{floor_count}`, `floor_view{has_base_rate}`, `evidence_open{module}`, `methodology_open`, `wizard_step{module, step, unknown}`, `evaluate_submit{module}`, `evaluate_result{module, plan_count, unknown_count}`, `correction_submit`. 프로필 값·주소·금액은 이벤트에 넣지 않는다.
 
-순방문·재방문 집계(docs/70 §5): 첫 방문 때 브라우저에 무작위 방문자 ID를 저장한다. IP는 저장하지 않고 `/privacy`에 고지한다(docs/60 §5). 내부 표시를 켠 브라우저와 봇(User-Agent)은 세지 않는다. "도움이 됐나요" 클릭 이벤트와 구현은 제안 티켓 T-104.
+순방문·재방문 집계(docs/70 §5): 첫 방문 때 브라우저에 무작위 방문자 ID를 저장한다. IP는 저장하지 않고 `/privacy`에 고지한다(docs/60 §5). `/privacy`에 통계에서 빠지는 스위치를 둔다(고지 + 거부 가능, ADR-027). 스위치를 켠 브라우저(내 기기 제외도 같은 플래그)와 봇(User-Agent)은 세지 않는다. "도움이 됐나요" 클릭 이벤트와 구현은 제안 티켓 T-104.
 
 ## 11. 성능 예산
 
