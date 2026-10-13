@@ -214,4 +214,5 @@
 | 2026-10-12 | pre-commit (dev) | 커밋 전 ruff·prettier 실행 (T-001). 훅은 `repo: local`로 잠금 파일의 도구 버전을 사용 | husky + lint-staged(Node 전용), 훅 없음 |
 | 2026-10-12 | httpx2 (dev) | FastAPI `TestClient`가 요구 (T-002). Starlette가 `httpx` 대신 권장 | httpx(Starlette에서 사용 중단 경고), ASGI 직접 호출 |
 | 2026-10-12 | eslint-config-prettier (dev) | ESLint 포맷 규칙과 Prettier 충돌 제거 | 규칙 수동 비활성화 |
+| 2026-10-13 | httpx2 (dev → 실행 의존성) | 도로명주소 API 클라이언트의 비동기 HTTP 호출 (T-021). 테스트용으로 이미 잠금 파일에 있던 패키지라 새로 늘어나는 것은 없다. `MockTransport`로 테스트에서 실호출 없이 요청 형식을 검사한다 | 표준 라이브러리 `urllib`(비동기 아님 — 스레드로 감싸야 함), aiohttp(새 패키지) |
 | 2026-10-13 | pandas-stubs (dev) | `app/location`은 mypy strict인데 pandas에 타입 정보가 없어 `import pandas`가 오류가 된다 (T-015 폐업 처리 급증일 탐지가 첫 사용) | pandas만 `ignore_missing_imports`(pandas 호출이 전부 `Any`가 돼 strict의 의미가 없어진다) |
