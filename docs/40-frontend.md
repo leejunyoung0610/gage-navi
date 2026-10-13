@@ -23,6 +23,7 @@
 | `/profile` | 클라이언트 | 내 사업장 정보 보기·수정·삭제 |
 | `/methodology` | SSR + ISR(1일) | 데이터·정의·모형·한계 |
 | `/about` | 정적 | 서비스 소개, 금지 사항(우리가 하지 않는 것), 출처 |
+| `/privacy` | 정적 + 클라이언트(스위치) | 개인정보 안내: 수집하지 않는 항목, 기기에 저장하는 값·목적·끄는 방법, 통계에서 빠지는 스위치 (docs/60 §5, T-104) |
 | `/admin/*` | 클라이언트, 인증 | 검수·변경·평가·정정 요청 |
 | `/api/revalidate` (Route Handler) | 서버 | API가 호출하는 on-demand 재생성. 헤더 `x-revalidate-secret` = `REVALIDATE_SECRET`, 본문 `{"paths": [...]}` |
 
@@ -155,7 +156,7 @@
 
 `address_search`, `place_view{floor_count}`, `floor_view{has_base_rate}`, `evidence_open{module}`, `methodology_open`, `wizard_step{module, step, unknown}`, `evaluate_submit{module}`, `evaluate_result{module, plan_count, unknown_count}`, `correction_submit`. 프로필 값·주소·금액은 이벤트에 넣지 않는다.
 
-순방문·재방문 집계(docs/70 §5): 첫 방문 때 브라우저에 무작위 방문자 ID를 저장한다. IP는 저장하지 않고 `/privacy`에 고지한다(docs/60 §5). `/privacy`에 통계에서 빠지는 스위치를 둔다(고지 + 거부 가능, ADR-027). 스위치를 켠 브라우저(내 기기 제외도 같은 플래그)와 봇(User-Agent)은 세지 않는다. "도움이 됐나요" 클릭 이벤트와 구현은 제안 티켓 T-104.
+방문 측정(docs/70 §5, ADR-027): 서버에 방문자 식별자를 보내지 않는다. 브라우저에는 첫 방문 날짜와 "이미 보냈음" 표시만 저장하고, 익명 이벤트 두 가지 — "첫 방문(날짜)", "7일 안 재방문(첫 방문 날짜)" — 를 각각 브라우저당 한 번만 보낸다. 서버는 식별자·IP·User-Agent를 저장하지 않는다(봇 거르기는 받을 때만 판단). `/privacy`의 스위치를 켠 브라우저(내 기기 제외도 같은 플래그)는 이 절의 **어떤 이벤트도 보내지 않는다**. "도움이 됐나요" 클릭 이벤트와 구현은 T-104.
 
 ## 11. 성능 예산
 
