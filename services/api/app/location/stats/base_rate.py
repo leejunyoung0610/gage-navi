@@ -4,6 +4,7 @@
 
 입력 `records`의 열: `id, license_type, pnu, floor, status, opened_on, closed_on, bulk_closure,
 stale_suspect, stale_area_match, no_fixed_place, biz_category, area_m2, sigungu_code`
+(기본 계산은 `suppressed`도 — 층 기록 수를 센다, `floor_scale.py`)
 (`license_record` 전체 — W0 정의의 급증일은 `pnu`가 없는 기록도 센다).
 """
 
@@ -132,6 +133,7 @@ def build_cohort(
     result = pd.DataFrame(
         {
             "id": rows["id"],
+            "license_type": rows["license_type"],
             "pnu": rows["pnu"],
             "floor": rows["floor"],
             "sigungu_code": rows["sigungu_code"],

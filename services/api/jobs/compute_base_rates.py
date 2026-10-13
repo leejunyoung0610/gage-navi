@@ -7,7 +7,8 @@
 (`jobs.build_history`) 뒤에 실행한다. 모든 설정에서 결론 유지 판정 (a)(b)가 참이면
 `base_rate`·`model_card`에 저장하고, 하나라도 깨지면 저장하지 않고 종료 코드 2로 끝난다.
 설정별 표는 판정과 상관없이 리포트(`reports/base_rates.md`)에 적는다. `w0`는 W0 재현 모드다
-(판정·리포트 없음, docs/10 §7.4).
+(판정·리포트 없음, docs/10 §7.4). 층 규모별 판정이 깨진 규모는 그 규모의 기준율만 저장하지 않고
+무엇이 깨졌는지 출력한다(T-019b, 종료 코드는 0).
 """
 
 import argparse
@@ -22,7 +23,7 @@ from app.core.db import get_engine
 from app.location.history.build import METHOD_VERSION
 from app.location.history.job import HistoryBuildError
 from app.location.stats.job import METHOD_VERSIONS, BaseRateResult, compute_base_rates
-from app.location.stats.report import render
+from app.location.stats.report import render, scale_failures
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_OUT = REPO_ROOT / "reports" / "base_rates.md"
@@ -64,6 +65,9 @@ def main(argv: list[str] | None = None) -> int:
         "base_rate_rows": len(result.computation.rates),
         "holds": result.holds,
         "saved": result.saved,
+        "floor_scales_held": None
+        if card.by_floor_scale is None
+        else [name for name, scale in card.by_floor_scale if scale.holds],
         "seconds": round(time.perf_counter() - started, 1),
     }
     print(json.dumps(line, ensure_ascii=False))
@@ -77,6 +81,10 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
         return EXIT_NOT_ROBUST
+    # 규모가 깨져도 멈추지 않는다. 그 규모의 기준율만 쓰지 않는다 (docs/10 §7.3)
+    if card.by_floor_scale is not None:
+        for broken in scale_failures(card.by_floor_scale):
+            print(f"층 규모 판정이 깨졌습니다: {broken}", file=sys.stderr)
     return 0
 
 

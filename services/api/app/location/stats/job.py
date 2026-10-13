@@ -32,7 +32,15 @@ _COLUMNS = (
     "biz_category",
     "area_m2",
     "sigungu_code",
+    "suppressed",
 )
+_RECORDS = """
+SELECT r.id, r.license_type, r.pnu, r.floor, r.status, r.opened_on, r.closed_on, r.bulk_closure,
+       r.stale_suspect, r.stale_area_match, r.no_fixed_place, r.biz_category, r.area_m2,
+       r.sigungu_code, s.record_id IS NOT NULL
+FROM license_record r
+LEFT JOIN record_suppression s ON s.record_id = r.id
+"""
 _W0_COLUMNS = (
     "id",
     "status",
@@ -54,10 +62,10 @@ WHERE snapshot_label = :snapshot_label AND method_version = :method_version
   AND license_group = :license_group
 """
 _INSERT_RATE = """
-INSERT INTO base_rate (snapshot_label, method_version, scope_code, license_group, prior_bucket,
-                       n, events, rate, ci_low, ci_high, cohort_from, cohort_to)
-VALUES (:snapshot_label, :method_version, :scope_code, :license_group, :prior_bucket,
-        :n, :events, :rate, :ci_low, :ci_high, :cohort_from, :cohort_to)
+INSERT INTO base_rate (snapshot_label, method_version, scope_code, license_group, floor_scale,
+                       prior_bucket, n, events, rate, ci_low, ci_high, cohort_from, cohort_to)
+VALUES (:snapshot_label, :method_version, :scope_code, :license_group, :floor_scale,
+        :prior_bucket, :n, :events, :rate, :ci_low, :ci_high, :cohort_from, :cohort_to)
 """
 _UPSERT_CARD = """
 INSERT INTO model_card (snapshot_label, method_version, payload)
@@ -97,6 +105,7 @@ async def _save(conn: AsyncConnection, computation: Computation) -> None:
             **key,
             "license_group": computation.license_group,
             "scope_code": item.scope_code,
+            "floor_scale": item.floor_scale,
             "prior_bucket": item.rate.bucket,
             "n": item.rate.n,
             "events": item.rate.events,
@@ -131,7 +140,9 @@ async def compute_base_rates(
         else:
             if as_of is None:
                 as_of = await default_as_of(conn)
-            records = await _frame(conn, _COLUMNS)
+            records = pd.DataFrame(
+                (await conn.execute(text(_RECORDS))).all(), columns=list(_COLUMNS)
+            )
             labels = {str(code): str(name) for code, name, _ in await conn.execute(text(_SIGUNGU))}
             computation = compute(records, as_of, labels)
         robustness = computation.card.robustness

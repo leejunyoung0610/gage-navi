@@ -57,6 +57,7 @@ def record(
         "biz_category": category,
         "area_m2": None if area is None else Decimal(area),
         "sigungu_code": None if pnu is None else pnu[:5],
+        "suppressed": False,
     }
 
 

@@ -6,13 +6,17 @@ import pandas as pd
 import pytest
 
 from app.location.history.build import (
+    MAX_AT_OPEN,
     PRIOR,
     PRIOR_EX_SURGE,
     build_floor_summary,
     build_parcels,
     build_record_prior,
     jibun_label,
+    max_concurrent,
+    max_concurrent_at_open,
     prior_closures,
+    scale_of,
     statistical,
 )
 
@@ -69,7 +73,7 @@ FLOOR = [
 
 
 def priors(rows: list[dict[str, object]]) -> dict[int, tuple[int, int]]:
-    result = build_record_prior(frame(rows))
+    result = build_record_prior(frame(rows), AS_OF)
     return {
         int(row["record_id"]): (int(row[PRIOR]), int(row[PRIOR_EX_SURGE]))
         for row in result.to_dict("records")
@@ -175,6 +179,135 @@ def test_median_tenure() -> None:
 )
 def test_has_concurrent(rows: list[dict[str, object]], expected: bool) -> None:
     assert summary(rows)[(P1, "1")]["has_concurrent"] is expected
+
+
+def brute_force(rows: list[dict[str, object]], until: date) -> int:
+    """정의 그대로: `until`에서 자른 기간들 중 함께 겹치는 길이가 30일을 넘는 가장 큰 묶음."""
+    spans = []
+    for row in rows:
+        start, end = row["opened_on"], row["closed_on"] or (row["status"] == "open" and AS_OF)
+        if isinstance(start, date) and isinstance(end, date):
+            spans.append((start, min(end, until)))
+    best = 1
+    for anchor, _ in spans:  # 가장 큰 묶음의 겹침은 어떤 기록의 개업일에서 시작한다
+        ends = [end for start, end in spans if start <= anchor and (end - anchor).days > 30]
+        best = max(best, len(ends))
+    return best
+
+
+def full(rows: list[dict[str, object]]) -> int:
+    return int(summary(rows)[(P1, "1")]["max_concurrent"])
+
+
+def at_open(rows: list[dict[str, object]]) -> dict[int, int]:
+    records = frame(rows)
+    counts = max_concurrent_at_open(statistical(records), AS_OF)
+    return {int(records.loc[index, "id"]): int(count) for index, count in counts.items()}
+
+
+def stores(count: int, opened: str = "2010-01-01", closed: str | None = "2015-01-01"):
+    return [record(number, opened, closed) for number in range(1, count + 1)]
+
+
+def test_max_concurrent_on_the_synthetic_floor() -> None:
+    # 1·2번(2008~2010), 2·3번, 3·5번이 둘씩 겹친다. 셋이 30일 넘게 함께 겹친 적은 없다
+    assert full(FLOOR) == 2 == brute_force(FLOOR, AS_OF)
+    # 개업일까지의 이력: 1·2번이 겹친 뒤에 연 3~7번은 2, 그 전에 연 1·2번은 1
+    assert at_open(FLOOR) == {1: 1, 2: 1, 3: 2, 4: 2, 5: 2, 6: 2, 7: 2}
+    priors_frame = build_record_prior(frame(FLOOR), AS_OF)
+    assert dict(zip(priors_frame["record_id"], priors_frame[MAX_AT_OPEN], strict=True)) == at_open(
+        FLOOR
+    )
+
+
+@pytest.mark.parametrize(
+    ("rows", "expected"),
+    [
+        ([record(1, "2010-01-01")], 1),
+        # 기간을 아는 기록이 없어도 최소 1
+        ([record(1, None, "2020-01-01"), record(2, "2011-01-01", None, status="closed")], 1),
+        # 가게가 바뀌면서 정확히 30일 겹침 → 동시가 아니다. 31일이면 동시
+        ([record(1, "2020-01-01", "2020-03-01"), record(2, "2020-01-31", "2020-12-31")], 1),
+        ([record(1, "2020-01-01", "2020-03-02"), record(2, "2020-01-31", "2020-12-31")], 2),
+        # 쌍으로는 겹쳐도 셋이 함께 겹치는 기간이 30일 이하면 2
+        (
+            [
+                record(1, "2020-01-01", "2020-06-30"),
+                record(2, "2020-06-01", "2020-12-31"),  # 1번과 29일
+                record(3, "2020-03-01", "2020-09-30"),
+            ],
+            2,
+        ),
+        # 규모 경계: 9곳과 10곳
+        (stores(9), 9),
+        (stores(10), 10),
+        # 10번째 가게가 30일만 겹치면 9
+        ([*stores(9, closed="2010-03-02"), record(10, "2010-01-31", "2011-01-01")], 9),
+        ([*stores(9, closed="2010-03-03"), record(10, "2010-01-31", "2011-01-01")], 10),
+        # 기간을 모르는 기록은 세지 않는다
+        (
+            [
+                *stores(2),
+                record(3, None, "2012-01-01"),
+                record(4, "2011-01-01", None, status="closed"),
+            ],
+            2,
+        ),
+        # 영업 중 기록은 기준일까지
+        ([record(1, "2026-09-06"), record(2, "2026-09-06")], 2),
+        ([record(1, "2026-09-07"), record(2, "2026-09-07")], 1),
+    ],
+)
+def test_max_concurrent(rows: list[dict[str, object]], expected: int) -> None:
+    assert full(rows) == expected == brute_force(rows, AS_OF)
+    assert summary(rows)[(P1, "1")]["has_concurrent"] is (expected >= 2)
+
+
+def test_scale_boundaries() -> None:
+    counts = pd.Series([1, 2, 9, 10, 250])
+    assert list(scale_of(counts)) == ["single", "small", "small", "large", "large"]
+
+
+def test_max_concurrent_at_open_uses_only_history_up_to_the_opening_day() -> None:
+    rows = [
+        record(1, "2010-01-01"),  # 10년 넘게 혼자 영업 중
+        record(2, "2020-01-01", "2020-06-30"),  # 1번과 겹치지만 자기 개업일에는 혼자 있던 층
+        record(3, "2021-01-01"),  # 1·2번이 겹친 뒤에 열었다
+        *[record(number, "2024-01-01") for number in range(4, 13)],  # 나중에 푸드코트가 된다
+        record(13, "2024-02-01"),  # 푸드코트가 열린 지 31일째에 연 가게
+        record(14, "2024-01-31"),  # 30일째에 연 가게
+    ]
+    counts = at_open(rows)
+    # 자기 자신은 개업일에 기간이 0일이라 누구와도 동시가 되지 않는다
+    assert (counts[1], counts[2]) == (1, 1)
+    assert counts[3] == 2
+    assert counts[4] == 2  # 같은 날 연 가게들끼리는 아직 겹친 적이 없다
+    assert counts[13] == 11  # 1·3번 + 푸드코트 9곳
+    assert counts[14] == 2
+    # 미래 정보가 새어 들어가지 않는다: 전체 이력으로는 모두 대형이다
+    assert full(rows) == 13 and int(max_concurrent(statistical(frame(rows)), AS_OF).min()) == 13
+    for number, row in enumerate(rows, start=1):
+        opened = row["opened_on"]
+        assert isinstance(opened, date)
+        others = [other for other in rows if other is not row]
+        assert counts[number] == brute_force(others, opened)
+
+
+def test_max_concurrent_at_open_scope() -> None:
+    rows = [
+        *stores(3, closed=None),
+        record(4, "2012-01-01", floor="2"),  # 층이 다르다
+        record(5, "2012-01-01", pnu=P2),  # 필지가 다르다
+        record(6, "2012-01-01"),
+        record(7, None),  # 개업일 없음 → 값 없음
+        record(8, "2005-01-01", mobile=True),  # 고정된 자리 없음 → F가 아니다
+        record(9, "2005-01-01", "2020-01-01", suppressed=True),  # 숨김 기록도 통계에는 센다
+    ]
+    counts = at_open(rows)
+    assert (counts[4], counts[5], counts[6]) == (1, 1, 4)
+    assert 7 not in counts and 8 not in counts
+    # 화면용 값은 이력에 보이는 기록만 센다
+    assert full(rows) == 4
 
 
 def test_parcels() -> None:
