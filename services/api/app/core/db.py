@@ -48,3 +48,15 @@ async def location_snapshot_label() -> str | None:
         async with get_engine().connect() as conn:
             earliest: datetime | None = (await conn.execute(text(_LOCATION_SNAPSHOT))).scalar()
     return None if earliest is None else earliest.astimezone(DISPLAY_TZ).strftime("%Y-%m")
+
+
+async def existing_parcels(pnus: list[str]) -> set[str]:
+    """`pnus` 중 `parcel` 테이블에 있는 것 (주소 검색 `has_history`, docs/30 §2)."""
+    if not pnus:
+        return set()
+    async with asyncio.timeout(PING_TIMEOUT_SECONDS):
+        async with get_engine().connect() as conn:
+            rows = await conn.execute(
+                text("SELECT pnu FROM parcel WHERE pnu = ANY(:pnus)"), {"pnus": pnus}
+            )
+            return {str(row[0]) for row in rows}

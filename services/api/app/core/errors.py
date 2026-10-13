@@ -54,12 +54,17 @@ class ErrorResponse(BaseModel):
 
 class ApiError(Exception):
     def __init__(
-        self, code: ErrorCode, message: str, details: dict[str, Any] | None = None
+        self,
+        code: ErrorCode,
+        message: str,
+        details: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
         self.details = details or {}
+        self.headers = headers
 
 
 async def _handle_api_error(request: Request, exc: Exception) -> JSONResponse:
@@ -68,7 +73,11 @@ async def _handle_api_error(request: Request, exc: Exception) -> JSONResponse:
         error=ErrorBody(code=exc.code, message=exc.message, details=exc.details),
         meta=ErrorMeta(request_id=new_request_id()),
     )
-    return JSONResponse(status_code=HTTP_STATUS[exc.code], content=body.model_dump(mode="json"))
+    return JSONResponse(
+        status_code=HTTP_STATUS[exc.code],
+        content=body.model_dump(mode="json"),
+        headers=exc.headers,
+    )
 
 
 def register_error_handlers(app: FastAPI) -> None:
