@@ -11,7 +11,7 @@ from typing import Literal
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.location.history.build import METHOD_VERSION, SINCE
+from app.location.history.build import METHOD_VERSION, SCALES, SINCE
 from app.location.stats import w0
 from app.location.stats.base_rate import (
     BucketRate,
@@ -21,6 +21,13 @@ from app.location.stats.base_rate import (
     censored_rates,
     cohort_to,
     separated,
+)
+from app.location.stats.floor_scale import (
+    RECORD_COUNT_RANGES,
+    floor_record_count,
+    record_count_range,
+    scale_at_open,
+    scale_full_history,
 )
 from app.location.stats.model import (
     SE,
@@ -37,6 +44,8 @@ from app.location.stats.model import (
 
 SEOUL = "11"
 FOOD3 = "food3"
+ALL_SCALES = "all"  # base_rate.floor_scale: 규모로 나누지 않은 값
+LICENSE_TYPES = ("general_restaurant", "rest_restaurant", "bakery")
 _RATE = Decimal("0.0001")  # base_rate.rate와 같은 자릿수 (docs/04)
 
 Bucket = Literal["0", "1", "2", "3", "4+"]
@@ -156,12 +165,52 @@ class CensoredOut(_Model):
     buckets: list[CensoredBucketOut]
 
 
+class LicenseTypeOut(_Model):
+    """인허가 종류별 결과. 판정에 넣지 않는다 (docs/10 §7.3)."""
+
+    general_restaurant: SettingResult
+    rest_restaurant: SettingResult
+    bakery: SettingResult
+
+
 class SensitivityOut(_Model):
     bulk_exclusion: BulkExclusionOut
     convenience_store: ConvenienceStoreOut
     exclude_stale: ExcludeStaleOut
     floor_unknown: FloorUnknownOut
     bulk_as_censored: CensoredOut
+    license_type: LicenseTypeOut
+
+
+class ScaleResult(_Model):
+    """층 규모 하나의 결과와 판정. `holds`가 거짓이면 그 규모의 기준율을 화면에 쓰지 않는다."""
+
+    n: int
+    event_rate: Decimal
+    buckets: list[BucketOut]
+    logit: LogitOut | None
+    criterion_a: bool
+    criterion_b: bool
+    holds: bool
+
+
+class FloorScaleOut(_Model):
+    single: ScaleResult
+    small: ScaleResult
+    large: ScaleResult
+
+
+class RecordCountOut(_Model):
+    range: str
+    n: int
+    events: int
+    rate: Decimal
+
+
+class FloorRecordCountOut(_Model):
+    """기본 설정 `4+` 버킷을 층의 기록 수로 나눈 값 (기록이 많은 층의 비중)."""
+
+    four_plus: list[RecordCountOut]
 
 
 class FailureOut(_Model):
@@ -187,14 +236,18 @@ class ModelCardPayload(_Model):
     out_of_time: OutOfTimeOut | None
     sensitivity: SensitivityOut | None
     robustness: RobustnessOut | None
+    by_floor_scale: FloorScaleOut | None
+    by_floor_scale_full_history: FloorScaleOut | None  # 비교용. 판정·화면에 쓰지 않는다
+    floor_record_count: FloorRecordCountOut | None
 
 
 @dataclass(frozen=True)
 class ScopeRate:
-    """`base_rate` 한 행 (범위 × 버킷)."""
+    """`base_rate` 한 행 (범위 × 층 규모 × 버킷)."""
 
     scope_code: str
     rate: BucketRate
+    floor_scale: str = ALL_SCALES
 
 
 @dataclass(frozen=True)
@@ -262,7 +315,7 @@ def setting_result(
     )
 
 
-def _failure_detail(result: SettingResult, criterion: str) -> str:
+def failure_detail(result: SettingResult | ScaleResult, criterion: str) -> str:
     if criterion == "a":
         by_bucket = {bucket.bucket: bucket for bucket in result.buckets}
         parts = [
@@ -292,7 +345,7 @@ def judge(results: dict[tuple[str, str], SettingResult]) -> RobustnessOut:
                         axis="default" if result.is_default else axis,
                         value="default" if result.is_default else value,
                         criterion=name,
-                        detail=_failure_detail(result, name),
+                        detail=failure_detail(result, name),
                     )
                 )
     return RobustnessOut(holds=not failures, failures=failures)
@@ -340,12 +393,47 @@ def _out_of_time(frame: pd.DataFrame) -> OutOfTimeOut | None:
     )
 
 
-def _scope_rates(cohort: pd.DataFrame, *, by_sigungu: bool) -> list[ScopeRate]:
-    rates = [ScopeRate(SEOUL, rate) for rate in bucket_rates(cohort)]
+def _scope_rates(
+    cohort: pd.DataFrame, *, by_sigungu: bool, floor_scale: str = ALL_SCALES
+) -> list[ScopeRate]:
+    rates = [ScopeRate(SEOUL, rate, floor_scale) for rate in bucket_rates(cohort)]
     if by_sigungu:
         for code, rows in cohort[cohort["sigungu_code"].notna()].groupby("sigungu_code", sort=True):
-            rates += [ScopeRate(str(code), rate) for rate in bucket_rates(rows)]
+            rates += [ScopeRate(str(code), rate, floor_scale) for rate in bucket_rates(rows)]
     return rates
+
+
+def _subset_result(cohort: pd.DataFrame) -> SettingResult:
+    """기본 설정 코호트의 한 부분(층 규모·인허가 종류)에 판정 (a)(b)를 다시 적용한다."""
+    return setting_result(cohort, fit_logit(model_frame(cohort)), is_default=False)
+
+
+def by_floor_scale(cohort: pd.DataFrame, scale: "pd.Series[str]") -> FloorScaleOut:
+    """층 규모별 결과. `scale`은 코호트 기록의 층 규모."""
+    results = {}
+    for name in SCALES:
+        result = _subset_result(cohort[scale[cohort.index] == name])
+        results[name] = ScaleResult(
+            **result.model_dump(exclude={"is_default"}),
+            holds=result.criterion_a and result.criterion_b,
+        )
+    return FloorScaleOut(**results)
+
+
+def _floor_record_count(cohort: pd.DataFrame, count: "pd.Series[int]") -> FloorRecordCountOut:
+    four_plus = cohort[cohort["prior"] >= 4]
+    ranges = record_count_range(count[four_plus.index])
+    rows = []
+    for label, _ in RECORD_COUNT_RANGES:
+        events = four_plus.loc[ranges == label, "event"]
+        if len(events):
+            n, closed = len(events), int(events.sum())
+            rows.append(
+                RecordCountOut(
+                    range=label, n=n, events=closed, rate=quantize(Decimal(closed) / Decimal(n))
+                )
+            )
+    return FloorRecordCountOut(four_plus=rows)
 
 
 def compute(records: pd.DataFrame, as_of: date, sigungu_labels: dict[str, str]) -> Computation:
@@ -370,6 +458,19 @@ def compute(records: pd.DataFrame, as_of: date, sigungu_labels: dict[str, str]) 
     by_axis: dict[str, dict[str, SettingResult]] = {}
     for (axis, value), result in results.items():
         by_axis.setdefault(axis, {})[value] = result
+    # 판정 밖: 인허가 종류별 (docs/10 §7.3)
+    by_axis["license_type"] = {
+        kind: _subset_result(cohort[cohort["license_type"] == kind]) for kind in LICENSE_TYPES
+    }
+    scale = scale_at_open(records, as_of)
+    scales = by_floor_scale(cohort, scale)
+    rates = _scope_rates(cohort, by_sigungu=True)
+    for name in SCALES:
+        # 판정이 깨진 규모의 기준율은 저장하지 않는다 (docs/10 §7.3)
+        if getattr(scales, name).holds:
+            rates += _scope_rates(
+                cohort[scale[cohort.index] == name], by_sigungu=True, floor_scale=name
+            )
     sensitivity = SensitivityOut.model_validate(
         {
             **by_axis,
@@ -410,10 +511,11 @@ def compute(records: pd.DataFrame, as_of: date, sigungu_labels: dict[str, str]) 
         out_of_time=_out_of_time(frame),
         sensitivity=sensitivity,
         robustness=judge(results),
+        by_floor_scale=scales,
+        by_floor_scale_full_history=by_floor_scale(cohort, scale_full_history(records, as_of)),
+        floor_record_count=_floor_record_count(cohort, floor_record_count(records)),
     )
-    return Computation(
-        METHOD_VERSION, FOOD3, SINCE, last_opened, card, _scope_rates(cohort, by_sigungu=True)
-    )
+    return Computation(METHOD_VERSION, FOOD3, SINCE, last_opened, card, rates)
 
 
 def compute_w0(general_records: pd.DataFrame) -> Computation:
@@ -437,6 +539,9 @@ def compute_w0(general_records: pd.DataFrame) -> Computation:
         out_of_time=_out_of_time(frame),
         sensitivity=None,
         robustness=None,
+        by_floor_scale=None,
+        by_floor_scale_full_history=None,
+        floor_record_count=None,
     )
     return Computation(
         w0.METHOD_VERSION,

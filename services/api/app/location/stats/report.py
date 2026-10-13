@@ -2,7 +2,16 @@
 
 from decimal import Decimal
 
-from app.location.stats.card import BucketOut, ModelCardPayload, SettingResult
+from app.location.history.build import SCALES
+from app.location.stats.card import (
+    LICENSE_TYPES,
+    BucketOut,
+    FloorScaleOut,
+    ModelCardPayload,
+    ScaleResult,
+    SettingResult,
+    failure_detail,
+)
 
 AXIS_LABELS = {
     "bulk_exclusion": "급증일",
@@ -27,6 +36,18 @@ VALUE_LABELS = {
 }
 
 
+SCALE_LABELS = {"single": "단독(1)", "small": "소형 복수(2~9)", "large": "대형(10+)"}
+LICENSE_LABELS = {
+    "general_restaurant": "일반음식점",
+    "rest_restaurant": "휴게음식점",
+    "bakery": "제과점영업",
+}
+_SUBSET_HEADER = [
+    "| {name} | n | 3년 내 폐업률 | 0 버킷 | 4+ 버킷 | 4+ n | 1회당 OR (95%) | (a) | (b) |",
+    "|---|---|---|---|---|---|---|---|---|",
+]
+
+
 def _pct(value: Decimal | float) -> str:
     return f"{Decimal(str(value)) * 100:.2f}%"
 
@@ -41,7 +62,7 @@ def _mark(passed: bool) -> str:
     return "유지" if passed else "**깨짐**"
 
 
-def _bucket(result: SettingResult, name: str) -> BucketOut | None:
+def _bucket(result: SettingResult | ScaleResult, name: str) -> BucketOut | None:
     return next((bucket for bucket in result.buckets if bucket.bucket == name), None)
 
 
@@ -59,10 +80,129 @@ def variants(card: ModelCardPayload) -> list[tuple[str, str, SettingResult]]:
     return rows
 
 
+def _odds(result: SettingResult | ScaleResult) -> str:
+    logit = result.logit
+    if logit is None:
+        return "적합 실패"
+    return f"{logit.or_per_prior:.3f} ({logit.ci[0]:.3f}~{logit.ci[1]:.3f})"
+
+
+def _subset_row(label: str, result: SettingResult | ScaleResult) -> str:
+    four = _bucket(result, "4+")
+    return (
+        f"| {label} | {result.n:,} | {_pct(result.event_rate)} | {_rate(_bucket(result, '0'))} |"
+        f" {_rate(four)} | {'—' if four is None else f'{four.n:,}'} | {_odds(result)} |"
+        f" {_mark(result.criterion_a)} | {_mark(result.criterion_b)} |"
+    )
+
+
+def scale_failures(scales: FloorScaleOut) -> list[str]:
+    """깨진 규모마다: 어느 규모에서 (a)·(b) 중 무엇이 어떤 값으로 깨졌는가."""
+    lines = []
+    for name in SCALES:
+        result: ScaleResult = getattr(scales, name)
+        for criterion, passed in (("a", result.criterion_a), ("b", result.criterion_b)):
+            if not passed:
+                lines.append(
+                    f"{SCALE_LABELS[name]}, ({criterion}): {failure_detail(result, criterion)}"
+                )
+    return lines
+
+
+def _floor_scale_lines(card: ModelCardPayload) -> list[str]:
+    scales, full = card.by_floor_scale, card.by_floor_scale_full_history
+    if scales is None or full is None:
+        return []
+    lines = ["", "## 층 규모별 (기본 설정, 개업일까지의 이력으로 센 규모)", ""]
+    lines.append(
+        "층 규모 = 그 층에서 동시에 영업한(겹침 30일 초과) 최대 점포 수. 규모마다 (a)(b)를 다시"
+        " 적용한다(docs/10 §7.2·§7.3)."
+    )
+    lines += ["", *(line.format(name="층 규모") for line in _SUBSET_HEADER)]
+    lines += [_subset_row(SCALE_LABELS[name], getattr(scales, name)) for name in SCALES]
+    failures = scale_failures(scales)
+    lines.append("")
+    if failures:
+        lines.append(
+            "**깨진 규모가 있다. 그 규모의 기준율은 `base_rate`에 쓰지 않았고, 화면은 카드 대신"
+            ' "이 규모의 자리에서는 차이가 확인되지 않았어요"를 표시한다.**'
+        )
+        lines += [f"- {failure}" for failure in failures]
+    else:
+        lines.append("세 규모 모두 (a)(b)가 유지됐다. 규모별 기준율을 저장했다.")
+    lines += [
+        "",
+        "| 층 규모 | 과거 폐업 | n | 3년 내 폐업 | 비율 | Wilson 95% |",
+        "|---|---|---|---|---|---|",
+    ]
+    for name in SCALES:
+        lines += [
+            f"| {SCALE_LABELS[name]} | {b.bucket} | {b.n:,} | {b.events:,} | {_pct(b.rate)} |"
+            f" {_pct(b.ci[0])}~{_pct(b.ci[1])} |"
+            for b in getattr(scales, name).buckets
+        ]
+
+    lines += ["", "## 비교: 전체 이력 기준 층 규모 (판정·화면에 쓰지 않는다)", ""]
+    lines.append(
+        "같은 코호트를 기준일까지의 전체 이력(개업일 뒤의 일 포함)으로 센 규모로 나눈 값."
+        " 미래 정보를 넣으면 숫자가 얼마나 달라지는지 본다."
+    )
+    lines += ["", *(line.format(name="층 규모") for line in _SUBSET_HEADER)]
+    lines += [_subset_row(SCALE_LABELS[name], getattr(full, name)) for name in SCALES]
+    lines += [
+        "",
+        "| 층 규모 | n: 개업일까지 → 전체 이력 | 0 버킷: 개업일까지 → 전체 이력 |"
+        " 4+ 버킷: 개업일까지 → 전체 이력 | 4+ n: 개업일까지 → 전체 이력 |",
+        "|---|---|---|---|---|",
+    ]
+    for name in SCALES:
+        ours, theirs = getattr(scales, name), getattr(full, name)
+        cells = [f"{ours.n:,} → {theirs.n:,}"]
+        for bucket in ("0", "4+"):
+            a, b = _bucket(ours, bucket), _bucket(theirs, bucket)
+            if a is None or b is None:
+                cells.append("—")
+            else:
+                cells.append(f"{_pct(a.rate)} → {_pct(b.rate)} ({(b.rate - a.rate) * 100:+.2f}%p)")
+        a, b = _bucket(ours, "4+"), _bucket(theirs, "4+")
+        cells.append(f"{a.n if a else 0:,} → {b.n if b else 0:,}")
+        lines.append(f"| {SCALE_LABELS[name]} | " + " | ".join(cells) + " |")
+    return lines
+
+
+def _reference_lines(card: ModelCardPayload) -> list[str]:
+    lines: list[str] = []
+    if card.sensitivity is not None:
+        lines += ["", "## 참고: 인허가 종류별 (판정에 넣지 않는다)", ""]
+        lines += [line.format(name="인허가 종류") for line in _SUBSET_HEADER]
+        lines += [
+            _subset_row(LICENSE_LABELS[kind], getattr(card.sensitivity.license_type, kind))
+            for kind in LICENSE_TYPES
+        ]
+    if card.floor_record_count is not None:
+        rows = card.floor_record_count.four_plus
+        total = sum(row.n for row in rows)
+        lines += ["", "## 참고: 4+ 버킷을 층의 기록 수로 나누면 (기본 설정)", ""]
+        lines.append(
+            "층의 기록 수 = 그 층키의 이력에 보이는 기록 수(`floor_summary.record_count`)."
+        )
+        lines += [
+            "",
+            "| 층의 기록 수 | 4+ n | 4+ 중 비중 | 3년 내 폐업 | 비율 |",
+            "|---|---|---|---|---|",
+        ]
+        lines += [
+            f"| {row.range} | {row.n:,} | {_pct(Decimal(row.n) / Decimal(total))} |"
+            f" {row.events:,} | {_pct(row.rate)} |"
+            for row in rows
+        ]
+    return lines
+
+
 def render(card: ModelCardPayload, method_version: str, saved: bool) -> str:
     data = card.data
     lines = [
-        "# 기준율·민감도 리포트 (T-019)",
+        "# 기준율·민감도 리포트 (T-019, T-019b)",
         "",
         "`python -m jobs.compute_base_rates`가 만든다. 정의와 판정 기준은 docs/10 §7.2·§7.3.",
         "",
@@ -161,6 +301,9 @@ def render(card: ModelCardPayload, method_version: str, saved: bool) -> str:
             f" {_pct(b.ci[0])}~{_pct(b.ci[1])} |"
             for b in censored.buckets
         ]
+
+    lines += _floor_scale_lines(card)
+    lines += _reference_lines(card)
 
     lines += ["", "## 로지스틱 (기본 설정)", ""]
     if card.logit is None:

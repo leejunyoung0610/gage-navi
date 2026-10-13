@@ -20,6 +20,10 @@ _EPOCH = pd.Timestamp("1900-01-01")
 _BIG = 1_000_000  # 층키 번호와 날짜를 한 정수로 묶는 자릿수 (날짜는 1900-01-01부터의 일수)
 
 PRIOR, PRIOR_EX_SURGE = "prior_closures_floor", "prior_closures_floor_ex_surge"
+MAX_AT_OPEN = "max_concurrent_at_open"
+# 층 규모: 동시에 영업한 최대 점포 수가 이 값 이상이면 소형 복수 / 대형 (docs/10 §7.2)
+SMALL_FROM, LARGE_FROM = 2, 10
+SCALES = ("single", "small", "large")
 
 
 def _days(values: "pd.Series[Any]") -> "pd.Series[float]":
@@ -61,8 +65,79 @@ def prior_closures(
     return pd.Series(count.astype(np.int64), index=floor_records.index[has_opened])
 
 
-def build_record_prior(records: pd.DataFrame) -> pd.DataFrame:
-    """`record_prior` 행: `record_id`, 급증일 폐업을 포함한 값과 뺀 값."""
+def _spans(floor_records: pd.DataFrame, as_of: date) -> "tuple[pd.Series[float], pd.Series[float]]":
+    """기록의 영업 기간 [시작, 끝] (일수). 영업 중이면 끝은 기준일, 모르면 NaN."""
+    start = _days(floor_records["opened_on"])
+    end = _days(floor_records["closed_on"])
+    as_of_days = float((pd.Timestamp(as_of) - _EPOCH).days)
+    return start, end.where(floor_records["status"] != "open", as_of_days)
+
+
+def _concurrency(
+    floor_records: pd.DataFrame, as_of: date
+) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.int64], npt.NDArray[np.int64]]:
+    """층키별 동시 영업 점포 수의 변화: (기록의 층키 번호, 변화 시점 키, 그때까지의 최댓값).
+
+    기간의 끝을 `CONCURRENT_MIN_DAYS + 1`일 당기면, 기록들이 함께 겹치는 길이가
+    `CONCURRENT_MIN_DAYS`일을 넘는 것은 당긴 기간들이 같은 날을 품는 것과 같다. 그래서 날마다
+    당긴 기간이 몇 개 걸쳐 있는지를 센다. 기간을 모르는 기록은 세지 않는다.
+    """
+    code: npt.NDArray[np.int64] = np.asarray(
+        floor_records.groupby(["pnu", "floor"], sort=False).ngroup(), dtype=np.int64
+    )
+    start, end = _spans(floor_records, as_of)
+    counted = (start.notna() & end.notna() & (end - start > CONCURRENT_MIN_DAYS)).to_numpy()
+    base = code[counted] * _BIG
+    enter = base + start.to_numpy()[counted].astype(np.int64)
+    leave = base + end.to_numpy()[counted].astype(np.int64) - CONCURRENT_MIN_DAYS
+    keys = np.concatenate([enter, leave])
+    delta = np.concatenate([np.ones(len(enter), np.int64), -np.ones(len(leave), np.int64)])
+    order = np.lexsort((delta, keys))  # 같은 날에는 나가는 쪽을 먼저 센다
+    keys, delta = keys[order], delta[order]
+    depth = np.cumsum(delta, dtype=np.int64)  # 층키마다 0으로 돌아오므로 전체 누적합으로 충분하다
+    running: npt.NDArray[np.int64] = (
+        pd.Series(depth).groupby(keys // _BIG, sort=False).cummax().to_numpy(dtype=np.int64)
+    )
+    return code, keys.astype(np.int64), running
+
+
+def max_concurrent(floor_records: pd.DataFrame, as_of: date) -> "pd.Series[int]":
+    """기록마다: 그 층에서 기준일까지 동시에 영업한 최대 점포 수 (최소 1, docs/10 §7.1)."""
+    code, keys, running = _concurrency(floor_records, as_of)
+    peak = pd.Series(running).groupby(keys // _BIG).max()
+    values = pd.Series(code).map(peak).fillna(0).to_numpy(dtype=np.int64)
+    return pd.Series(np.maximum(values, 1).astype(int), index=floor_records.index, dtype=int)
+
+
+def max_concurrent_at_open(floor_records: pd.DataFrame, as_of: date) -> "pd.Series[int]":
+    """기록마다: 개업일까지의 이력으로 센 동시 영업 최대 점포 수 (최소 1, docs/10 §7.2).
+
+    개업일에서 기간을 자르면 개업일 `CONCURRENT_MIN_DAYS + 1`일 전까지의 최댓값과 같다.
+    개업일이 없는 기록은 내지 않는다.
+    """
+    code, keys, running = _concurrency(floor_records, as_of)
+    opened = _days(floor_records["opened_on"]).to_numpy()
+    has_opened = ~np.isnan(opened)
+    code = code[has_opened]
+    query = code * _BIG + opened[has_opened].astype(np.int64) - (CONCURRENT_MIN_DAYS + 1)
+    last = np.searchsorted(keys, query, "right") - 1
+    values = np.zeros(len(query), dtype=np.int64)
+    if len(keys):
+        found = (last >= 0) & (keys[np.maximum(last, 0)] // _BIG == code)
+        values[found] = running[last[found]]
+    return pd.Series(
+        np.maximum(values, 1).astype(int), index=floor_records.index[has_opened], dtype=int
+    )
+
+
+def scale_of(count: "pd.Series[int]") -> "pd.Series[str]":
+    """동시에 영업한 최대 점포 수 → 층 규모 `single`(1) / `small`(2~9) / `large`(10 이상)."""
+    scale = np.where(count >= LARGE_FROM, "large", np.where(count >= SMALL_FROM, "small", "single"))
+    return pd.Series(scale, index=count.index, dtype=object)
+
+
+def build_record_prior(records: pd.DataFrame, as_of: date) -> pd.DataFrame:
+    """`record_prior` 행: `record_id`, 과거 폐업 횟수 두 값, 개업일까지의 동시 영업 최대 점포 수."""
     floor_records = statistical(records)
     with_surge = prior_closures(floor_records)
     without_surge = prior_closures(floor_records, floor_records["bulk_closure"].astype(bool))
@@ -71,16 +146,14 @@ def build_record_prior(records: pd.DataFrame) -> pd.DataFrame:
             "record_id": floor_records.loc[with_surge.index, "id"].to_numpy(),
             PRIOR: with_surge.to_numpy(),
             PRIOR_EX_SURGE: without_surge.to_numpy(),
+            MAX_AT_OPEN: max_concurrent_at_open(floor_records, as_of)[with_surge.index].to_numpy(),
         }
     )
 
 
 def _has_concurrent(floor_records: pd.DataFrame, as_of: date) -> "pd.Series[bool]":
     """층키마다: 영업 기간이 `CONCURRENT_MIN_DAYS`일 넘게 겹치는 쌍이 있는가."""
-    start = _days(floor_records["opened_on"])
-    end = _days(floor_records["closed_on"])
-    as_of_days = float((pd.Timestamp(as_of) - _EPOCH).days)
-    end = end.where(floor_records["status"] != "open", as_of_days)
+    start, end = _spans(floor_records, as_of)
     known = start.notna() & end.notna()  # 기간을 모르는 기록은 판정에서 뺀다
     spans = pd.DataFrame(
         {"pnu": floor_records["pnu"], "floor": floor_records["floor"], "start": start, "end": end}
@@ -123,6 +196,7 @@ def build_floor_summary(records: pd.DataFrame, as_of: date) -> pd.DataFrame:
     summary["median_closed_tenure_days"] = _round_half_up(summary["median_closed_tenure_days"])
     concurrent = _has_concurrent(floor_records, as_of)
     summary["has_concurrent"] = concurrent.reindex(summary.index, fill_value=False)
+    summary["max_concurrent"] = max_concurrent(floor_records, as_of).groupby(keys).first()
     summary["method_version"] = METHOD_VERSION
     return summary.rename_axis(["pnu", "floor"]).reset_index()
 

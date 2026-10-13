@@ -112,7 +112,7 @@ async def build_history(engine: AsyncEngine, as_of: date | None = None) -> Histo
 
         parcels = build_parcels(records, dong_names)
         floors = build_floor_summary(records, as_of)
-        priors = build_record_prior(records)
+        priors = build_record_prior(records, as_of)
         priors["method_version"] = METHOD_VERSION
         floors = floors.astype(object).where(floors.notna(), None)
 

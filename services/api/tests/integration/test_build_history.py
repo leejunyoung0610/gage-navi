@@ -1,4 +1,4 @@
-"""층 이력 빌드 잡과 마이그레이션 0005 (T-018). 필지·업소·날짜는 모두 가상 예시다."""
+"""층 이력 빌드 잡과 마이그레이션 0005·0006 (T-018, T-019b). 필지·업소·날짜는 모두 가상 예시다."""
 
 import asyncio
 from collections.abc import Awaitable, Callable
@@ -98,12 +98,13 @@ def seeded(migrated_db_url: str) -> str:
 
 
 PRIORS = (
-    "SELECT r.mgmt_no, p.prior_closures_floor, p.prior_closures_floor_ex_surge, p.method_version "
+    "SELECT r.mgmt_no, p.prior_closures_floor, p.prior_closures_floor_ex_surge, p.method_version, "
+    "p.max_concurrent_at_open "
     "FROM record_prior p JOIN license_record r ON r.id = p.record_id ORDER BY 1"
 )
 FLOORS = (
     "SELECT floor, record_count, records_since_2005, open_now_count, median_closed_tenure_days, "
-    "has_concurrent, method_version FROM floor_summary ORDER BY floor"
+    "has_concurrent, method_version, max_concurrent FROM floor_summary ORDER BY floor"
 )
 PARCELS = (
     "SELECT pnu, legal_dong_code, jibun_label, road_addr, ST_AsText(geom), floors, record_count "
@@ -125,14 +126,16 @@ def test_build_writes_parcels_floors_and_priors(seeded: str) -> None:
     assert fetch_all(seeded, FLOORS) == [
         # 1층: A1·A2·A3 (푸드트럭 A4는 빠진다).
         # 폐업 영업기간 중앙값은 급증일 폐업 A2를 뺀 A1의 1,641일
-        ("1", 3, 3, 1, 1641, True, "2026.10.1"),
-        ("B1", 1, 1, 1, None, False, "2026.10.1"),
+        # 동시에 영업한 최대 점포 수: A1·A2가 겹쳤고 A3은 A2가 폐업한 다음 날 열었다 → 2
+        ("1", 3, 3, 1, 1641, True, "2026.10.1", 2),
+        ("B1", 1, 1, 1, None, False, "2026.10.1", 1),
     ]
     assert fetch_all(seeded, PRIORS) == [
-        ("A1", 0, 0, "2026.10.1"),
-        ("A2", 0, 0, "2026.10.1"),
-        ("A3", 2, 1, "2026.10.1"),  # 편의점도 이력·통계 집합에 있다. A2는 급증일 폐업
-        ("A5", 0, 0, "2026.10.1"),
+        # 마지막 값: 개업일까지의 이력으로 센 동시 영업 최대 점포 수 (A3이 열 때는 A1·A2가 겹친 뒤)
+        ("A1", 0, 0, "2026.10.1", 1),
+        ("A2", 0, 0, "2026.10.1", 1),
+        ("A3", 2, 1, "2026.10.1", 2),  # 편의점도 이력·통계 집합에 있다. A2는 급증일 폐업
+        ("A5", 0, 0, "2026.10.1", 1),
     ]
     store = fetch_all(seeded, "SELECT biz_category FROM license_record WHERE mgmt_no = 'A3'")
     assert store == [("편의점",)]
@@ -188,3 +191,41 @@ def test_migration_0005_roundtrip(
     assert fetch_all(empty_db_url, query) == []
     command.upgrade(config, "head")
     assert fetch_all(empty_db_url, query) == [("NO", None)]
+
+
+def test_migration_0006_roundtrip(
+    empty_db_url: str, make_alembic_config: Callable[[str], Config]
+) -> None:
+    config = make_alembic_config(empty_db_url)
+    columns = (
+        "SELECT table_name, column_name, is_nullable, column_default "
+        "FROM information_schema.columns WHERE (table_name, column_name) IN "
+        "(('floor_summary', 'max_concurrent'), ('record_prior', 'max_concurrent_at_open'), "
+        "('base_rate', 'floor_scale')) ORDER BY 1"
+    )
+    unique = (
+        "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+        "WHERE conrelid = 'base_rate'::regclass AND contype = 'u'"
+    )
+    upgraded = [
+        ("base_rate", "floor_scale", "NO", "'all'::text"),
+        ("floor_summary", "max_concurrent", "NO", None),
+        ("record_prior", "max_concurrent_at_open", "NO", None),
+    ]
+    new_unique = [
+        (
+            "UNIQUE (snapshot_label, method_version, scope_code, license_group, floor_scale,"
+            " prior_bucket)",
+        )
+    ]
+    command.upgrade(config, "head")
+    assert fetch_all(empty_db_url, columns) == upgraded
+    assert fetch_all(empty_db_url, unique) == new_unique
+    command.downgrade(config, "0005_prior_ex_surge")
+    assert fetch_all(empty_db_url, columns) == []
+    assert fetch_all(empty_db_url, unique) == [
+        ("UNIQUE (snapshot_label, method_version, scope_code, license_group, prior_bucket)",)
+    ]
+    command.upgrade(config, "head")
+    assert fetch_all(empty_db_url, columns) == upgraded
+    assert fetch_all(empty_db_url, unique) == new_unique

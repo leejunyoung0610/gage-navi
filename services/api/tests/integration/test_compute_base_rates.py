@@ -1,4 +1,7 @@
-"""기준율 잡: 저장, 재실행, 판정이 깨지면 저장하지 않음 (T-019). 기록은 모두 가상 예시다."""
+"""기준율 잡: 저장, 재실행, 판정이 깨지면 저장하지 않음, 층 규모별 저장 (T-019, T-019b).
+
+기록은 모두 가상 예시다.
+"""
 
 import json
 from datetime import date
@@ -13,7 +16,7 @@ from app.core.db import get_engine
 from app.location.stats.job import BaseRateResult, compute_base_rates
 from jobs import compute_base_rates as cli
 from tests.integration.test_build_history import execute, fetch_all, with_engine
-from tests.unit.test_stats_model import synthetic
+from tests.unit.test_stats_model import crowded, synthetic
 
 AS_OF = date(2026, 10, 7)
 INSERT = """
@@ -69,7 +72,7 @@ def test_saves_base_rates_and_model_card(migrated_db_url: str) -> None:
         migrated_db_url,
         "SELECT scope_code, prior_bucket, n, events, rate, ci_low, ci_high, cohort_from, cohort_to,"
         " snapshot_label, method_version, license_group FROM base_rate"
-        " ORDER BY scope_code, prior_bucket",
+        " WHERE floor_scale = 'all' ORDER BY scope_code, prior_bucket",
     )
     assert {row[0] for row in rows} == {"11", "11215", "11440"}
     seoul = [row for row in rows if row[0] == "11"]
@@ -93,6 +96,62 @@ def test_saves_base_rates_and_model_card(migrated_db_url: str) -> None:
     before = counts(migrated_db_url)
     run(migrated_db_url)
     assert counts(migrated_db_url) == before
+
+
+def test_saves_base_rates_only_for_floor_scales_that_hold(
+    migrated_db_url: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Any, capsys: Any
+) -> None:
+    # 단독 층에는 효과가 있고, 소형 복수 층에는 효과가 없다. 대형 층은 없다
+    records = pd.concat(
+        [synthetic(seed=1, effect=0.10, floors=1500), crowded(seed=5, effect=0.0, floors=300)],
+        ignore_index=True,
+    )
+    load(migrated_db_url, records.assign(id=range(1, len(records) + 1)))
+    result = run(migrated_db_url)
+    assert result.holds and result.saved
+    scales = result.computation.card.by_floor_scale
+    assert scales is not None
+    assert (scales.single.holds, scales.small.holds, scales.large.holds) == (True, False, False)
+
+    saved = fetch_all(
+        migrated_db_url,
+        "SELECT floor_scale, count(*), count(DISTINCT scope_code) FROM base_rate"
+        " GROUP BY floor_scale ORDER BY 1",
+    )
+    assert [row[0] for row in saved] == ["all", "single"]  # 깨진 규모의 행은 없다
+    ((payload,),) = fetch_all(migrated_db_url, "SELECT payload FROM model_card")
+    payload = payload if isinstance(payload, dict) else json.loads(payload)
+    assert payload["by_floor_scale"]["small"]["holds"] is False
+    assert payload["by_floor_scale"]["small"]["buckets"]  # 깨진 규모의 값도 카드에는 있다
+    single = fetch_all(
+        migrated_db_url,
+        "SELECT prior_bucket, n FROM base_rate WHERE floor_scale = 'single' AND scope_code = '11'"
+        " ORDER BY prior_bucket",
+    )
+    assert single == [
+        (bucket["bucket"], bucket["n"]) for bucket in payload["by_floor_scale"]["single"]["buckets"]
+    ]
+
+    # 다시 실행해도 같은 결과
+    rates = (
+        "SELECT scope_code, floor_scale, prior_bucket, n, events, rate, ci_low, ci_high"
+        " FROM base_rate ORDER BY 1, 2, 3"
+    )
+    before = fetch_all(migrated_db_url, rates)
+    run(migrated_db_url)
+    assert fetch_all(migrated_db_url, rates) == before
+
+    # CLI: 규모가 깨져도 종료 코드는 0, 무엇이 깨졌는지 출력한다
+    monkeypatch.setenv("DATABASE_URL", migrated_db_url)
+    get_engine.cache_clear()
+    out = tmp_path / "base_rates.md"
+    try:
+        code = cli.main(["--as-of", AS_OF.isoformat(), "--out", str(out)])
+    finally:
+        get_engine.cache_clear()
+    assert code == 0
+    assert "층 규모 판정이 깨졌습니다: 소형 복수(2~9), (b)" in capsys.readouterr().err
+    assert "깨진 규모가 있다" in out.read_text(encoding="utf-8")
 
 
 def test_does_not_save_when_conclusion_breaks(
