@@ -25,6 +25,7 @@ from app.location.stats.base_rate import (
 from app.location.stats.floor_scale import (
     RECORD_COUNT_RANGES,
     floor_record_count,
+    has_open_neighbor,
     record_count_range,
     scale_at_open,
     scale_full_history,
@@ -225,6 +226,15 @@ class RobustnessOut(_Model):
     failures: list[FailureOut]
 
 
+class OpenNeighborOut(_Model):
+    """단독으로 분류됐지만 개업일에 다른 점포가 영업 중이던 기록. 사후 참고 — 판정은 그대로다."""
+
+    single_n: int
+    with_open_neighbor_n: int
+    share: Decimal
+    without_open_neighbor: SettingResult  # 그 기록을 뺀 단독
+
+
 class ModelCardPayload(_Model):
     """`model_card.payload`. W0 재현 모드에는 설정·민감도·판정이 없다."""
 
@@ -239,6 +249,7 @@ class ModelCardPayload(_Model):
     by_floor_scale: FloorScaleOut | None
     by_floor_scale_full_history: FloorScaleOut | None  # 비교용. 판정·화면에 쓰지 않는다
     floor_record_count: FloorRecordCountOut | None
+    single_with_open_neighbor: OpenNeighborOut | None  # 사후 참고
 
 
 @dataclass(frozen=True)
@@ -420,6 +431,21 @@ def by_floor_scale(cohort: pd.DataFrame, scale: "pd.Series[str]") -> FloorScaleO
     return FloorScaleOut(**results)
 
 
+def _single_with_open_neighbor(
+    cohort: pd.DataFrame, scale: "pd.Series[str]", neighbor: "pd.Series[bool]"
+) -> OpenNeighborOut:
+    single = cohort[scale[cohort.index] == "single"]
+    crowded = neighbor[single.index]
+    return OpenNeighborOut(
+        single_n=len(single),
+        with_open_neighbor_n=int(crowded.sum()),
+        share=quantize(Decimal(int(crowded.sum())) / Decimal(len(single)))
+        if len(single)
+        else Decimal(0),
+        without_open_neighbor=_subset_result(single[~crowded]),
+    )
+
+
 def _floor_record_count(cohort: pd.DataFrame, count: "pd.Series[int]") -> FloorRecordCountOut:
     four_plus = cohort[cohort["prior"] >= 4]
     ranges = record_count_range(count[four_plus.index])
@@ -514,6 +540,9 @@ def compute(records: pd.DataFrame, as_of: date, sigungu_labels: dict[str, str]) 
         by_floor_scale=scales,
         by_floor_scale_full_history=by_floor_scale(cohort, scale_full_history(records, as_of)),
         floor_record_count=_floor_record_count(cohort, floor_record_count(records)),
+        single_with_open_neighbor=_single_with_open_neighbor(
+            cohort, scale, has_open_neighbor(records, as_of)
+        ),
     )
     return Computation(METHOD_VERSION, FOOD3, SINCE, last_opened, card, rates)
 
@@ -542,6 +571,7 @@ def compute_w0(general_records: pd.DataFrame) -> Computation:
         by_floor_scale=None,
         by_floor_scale_full_history=None,
         floor_record_count=None,
+        single_with_open_neighbor=None,
     )
     return Computation(
         w0.METHOD_VERSION,

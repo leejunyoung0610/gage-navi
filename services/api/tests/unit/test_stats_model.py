@@ -18,7 +18,7 @@ from app.location.stats.card import (
 )
 from app.location.stats.floor_scale import record_count_range
 from app.location.stats.model import auc, fit_logit, model_frame, out_of_time
-from app.location.stats.report import render, scale_failures, variants
+from app.location.stats.report import HIDDEN_MESSAGE, render, scale_failures, variants
 
 AS_OF = date(2026, 10, 7)
 SIGUNGU = {"11215": "광진구", "11440": "마포구"}
@@ -174,7 +174,7 @@ def test_compute_payload_matches_documented_structure(strong: pd.DataFrame) -> N
     assert set(payload) == {
         "data", "default_setting", "base_rates", "logit", "by_sigungu", "out_of_time",
         "sensitivity", "robustness", "by_floor_scale", "by_floor_scale_full_history",
-        "floor_record_count",
+        "floor_record_count", "single_with_open_neighbor",
     }  # fmt: skip
     assert set(payload["sensitivity"]) == {
         "bulk_exclusion", "convenience_store", "exclude_stale", "floor_unknown", "bulk_as_censored",
@@ -284,7 +284,11 @@ def test_broken_scale_is_not_written_to_base_rates(mixed: pd.DataFrame) -> None:
 
     report = render(computation.card, computation.method_version, saved=True)
     assert "깨진 규모가 있다" in report
-    assert "이 규모의 자리에서는 차이가 확인되지 않았어요" in report
+    assert HIDDEN_MESSAGE in report
+    banned = ["망한 자리", "위험한 자리", "저주", "흉지", "대박", "승인 보장", "대출 확정"]
+    assert not any(word in HIDDEN_MESSAGE for word in [*banned, "100%", "무조건", "누구나"])
+    assert "OR에 쓴 n" in report and "## 한계" in report
+    assert "결과를 본 뒤 모형을 바꿔 판정을 다시 하지는 않는다" in report
     failures = scale_failures(computation.card.by_floor_scale)
     assert any(line.startswith("소형 복수(2~9), (b): OR ") for line in failures)
     assert "대형(10+), (a): 0: 기록 없음, 4+: 기록 없음" in failures
@@ -348,3 +352,29 @@ def test_record_count_ranges() -> None:
     assert list(record_count_range(counts)) == [
         "1-10", "1-10", "11-20", "11-20", "21-50", "21-50", "51+", "51+",
     ]  # fmt: skip
+
+
+def test_single_with_open_neighbor_is_a_post_hoc_reference(strong: pd.DataFrame) -> None:
+    # 층 500곳에 2022년부터 영업 중인 가게를 하나씩 더한다: 그 뒤에 연 가게는 단독이지만
+    # 개업일에 다른 점포가 영업 중이다
+    first = strong.drop_duplicates(["pnu", "floor"]).head(500)
+    neighbors = first.assign(status="open", opened_on=date(2022, 6, 1), closed_on=None)
+    records = pd.concat([strong, neighbors], ignore_index=True)
+    records["id"] = range(1, len(records) + 1)
+    computation = compute(records, AS_OF, SIGUNGU)
+    card = computation.card
+    reference, scales = card.single_with_open_neighbor, card.by_floor_scale
+    assert reference is not None and scales is not None
+    assert reference.single_n == scales.single.n
+    assert 0 < reference.with_open_neighbor_n < reference.single_n
+    without = reference.without_open_neighbor
+    assert without.n == reference.single_n - reference.with_open_neighbor_n
+    # 판정과 저장은 그대로다: 단독의 기준율 행은 그 기록을 빼지 않은 값이다
+    seoul_single = [
+        item.rate
+        for item in computation.rates
+        if item.floor_scale == "single" and item.scope_code == "11"
+    ]
+    assert sum(rate.n for rate in seoul_single) == reference.single_n
+    report = render(card, "2026.10.1", saved=True)
+    assert "사후 참고(판정 불변)" in report and "그 기록을 뺀 단독 (사후 참고)" in report

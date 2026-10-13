@@ -130,6 +130,30 @@ def max_concurrent_at_open(floor_records: pd.DataFrame, as_of: date) -> "pd.Seri
     )
 
 
+def open_others_at_open(floor_records: pd.DataFrame, as_of: date) -> "pd.Series[int]":
+    """기록마다: 개업일에 같은 층에서 영업 중이던 다른 기록 수 (`시작 < 개업일 < 끝`).
+
+    층 규모 셈과 달리 겹친 기간의 길이를 보지 않는다 (참고용, docs/10 §7.3). 기간을 모르는
+    기록은 세지 않고, 개업일이 없는 기록은 내지 않는다.
+    """
+    code: npt.NDArray[np.int64] = np.asarray(
+        floor_records.groupby(["pnu", "floor"], sort=False).ngroup(), dtype=np.int64
+    )
+    start, end = _spans(floor_records, as_of)
+    counted = (start.notna() & end.notna() & (end > start)).to_numpy()
+    starts = np.sort(code[counted] * _BIG + start.to_numpy()[counted].astype(np.int64))
+    ends = np.sort(code[counted] * _BIG + end.to_numpy()[counted].astype(np.int64))
+    has_opened = start.notna().to_numpy()
+    base = code[has_opened] * _BIG
+    query = base + start.to_numpy()[has_opened].astype(np.int64)
+    # 끝이 시작보다 늦은 기록만 세므로, 개업일까지 끝난 기록은 모두 개업일 전에 시작했다
+    started = np.searchsorted(starts, query, "left") - np.searchsorted(starts, base, "left")
+    ended = np.searchsorted(ends, query, "right") - np.searchsorted(ends, base, "left")
+    return pd.Series(
+        (started - ended).astype(int), index=floor_records.index[has_opened], dtype=int
+    )
+
+
 def scale_of(count: "pd.Series[int]") -> "pd.Series[str]":
     """동시에 영업한 최대 점포 수 → 층 규모 `single`(1) / `small`(2~9) / `large`(10 이상)."""
     scale = np.where(count >= LARGE_FROM, "large", np.where(count >= SMALL_FROM, "small", "single"))

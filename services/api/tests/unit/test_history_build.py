@@ -15,6 +15,7 @@ from app.location.history.build import (
     jibun_label,
     max_concurrent,
     max_concurrent_at_open,
+    open_others_at_open,
     prior_closures,
     scale_of,
     statistical,
@@ -308,6 +309,25 @@ def test_max_concurrent_at_open_scope() -> None:
     assert 7 not in counts and 8 not in counts
     # 화면용 값은 이력에 보이는 기록만 센다
     assert full(rows) == 4
+
+
+def test_open_others_at_open() -> None:
+    rows = [
+        record(1, "2010-01-01"),  # 영업 중
+        record(2, "2012-01-01", "2015-01-01"),
+        record(3, "2015-01-01"),  # 2번이 폐업한 날 개업 → 2번은 세지 않는다
+        record(4, "2014-12-31", "2014-12-31"),  # 같은 날 개·폐업 → 다른 가게에게 세지 않는다
+        record(5, "2015-01-01"),  # 3번과 같은 날 개업 → 서로 세지 않는다
+        record(6, None, "2020-01-01"),  # 기간을 모른다
+        record(7, "2013-01-01", None, status="closed"),  # 기간을 모른다
+        record(8, "2016-01-01", floor="2"),  # 층이 다르다
+    ]
+    records = frame(rows)
+    counts = open_others_at_open(statistical(records), AS_OF)
+    by_id = {int(records.loc[index, "id"]): int(count) for index, count in counts.items()}
+    assert by_id == {1: 0, 2: 1, 3: 1, 4: 2, 5: 1, 7: 2, 8: 0}
+    # 개업일에 다른 점포가 영업 중이어도, 30일 넘게 겹친 적이 없던 층이면 층 규모는 단독(1)이다
+    assert at_open(rows)[2] == 1
 
 
 def test_parcels() -> None:

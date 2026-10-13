@@ -105,7 +105,7 @@
 ```
 - `floor_scale`: 이 층의 규모 `single`(동시에 영업한 최대 점포 수 1) / `small`(2~9) / `large`(10 이상). `summary.max_concurrent`로 정한다(docs/10 §7.2). `primary`·`baseline`·`secondary`는 **이 규모의 기준율**(`base_rate.floor_scale`)이다 (T-019b, 응답 구현은 T-022)
 - `display=false`이면 `hidden_reason`은 둘 중 하나다. 이때 `primary`·`baseline`·`secondary`는 `null`
-  - `"not_confirmed_for_floor_scale"`: 이 규모에서 결론 유지 판정 (a)(b)가 깨졌다(최신 `model_card.payload.by_floor_scale.{규모}.holds = false`, docs/10 §7.3). 규모로 나누지 않은 값으로 대신하지 않는다. 이 값이 먼저다
+  - `"not_confirmed_for_floor_scale"`: 이 규모에서 결론 유지 판정 (a)(b)가 깨졌다(최신 `model_card.payload.by_floor_scale.{규모}.holds = false`, docs/10 §7.3). 화면 문구는 docs/40 §4.4. 규모로 나누지 않은 값으로 대신하지 않는다. 이 값이 먼저다
   - `"insufficient_sample"`: 이 규모의 해당 버킷 n < 200(시군구·서울 모두)
 - `notices` 값과 발생 조건: docs/10 §7.1
 - `stale_suspect`는 같은 호 근거만이다. 면적 근거 `stale_area_match`는 응답에 넣지 않는다 (docs/10 §6)
