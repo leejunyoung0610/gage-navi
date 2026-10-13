@@ -127,8 +127,12 @@ class JusoClient:
         self._confm_key = confm_key
         self._http = http
 
-    async def fetch(self, keyword: str, page: int) -> Any:
-        """응답 JSON을 그대로 돌려준다 (녹화 잡과 `search`가 함께 쓴다)."""
+    async def fetch(self, keyword: str, page: int, *, add_info: bool = False) -> Any:
+        """응답 JSON을 그대로 돌려준다 (녹화 잡과 `search`가 함께 쓴다).
+
+        `add_info`: 관련지번(`relJibun`) 등 추가 항목을 함께 받는다(`addInfoYn=Y`).
+        주소 검색 프록시는 쓰지 않고, 검색 일치율 측정의 불일치 사유 분류만 쓴다(docs/50 §7).
+        """
         form = {
             "confmKey": self._confm_key,
             "currentPage": str(page),
@@ -136,6 +140,8 @@ class JusoClient:
             "keyword": keyword,
             "resultType": "json",
         }
+        if add_info:
+            form["addInfoYn"] = "Y"
         try:
             response = await self._http.post(JUSO_SEARCH_URL, data=form, timeout=TIMEOUT_SECONDS)
         except httpx2.HTTPError as exc:
