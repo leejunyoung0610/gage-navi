@@ -59,7 +59,16 @@ def test_fixture_documents_hold_only_keyword_page_and_response() -> None:
 
 
 @pytest.mark.parametrize(
-    "name", ["guide_sample", "single_parcel", "mountain_lot", "many_results_p1", "many_results_p2"]
+    "name",
+    [
+        "guide_sample",
+        "single_parcel",
+        "mountain_lot",
+        "many_results_p1",
+        "many_results_p2",
+        "single_parcel_add_info",
+        "mountain_lot_add_info",
+    ],
 )
 def test_used_fields_exist_and_make_pnu(name: str) -> None:
     juso = rows(name)
@@ -103,3 +112,18 @@ def test_no_result() -> None:
 def test_keyword_too_broad_is_keyword_error() -> None:
     with pytest.raises(JusoKeywordError):
         parse_response(load("keyword_too_broad")["response"], page=1)
+
+
+def test_related_lots_format() -> None:
+    # T-021b: 추가 항목(`addInfoYn=Y`)의 관련지번을 읽는다 (불일치 분류용, docs/50 §7)
+    from app.address.search_match import parse_rel_jibun
+
+    for name in ("single_parcel_add_info", "mountain_lot_add_info"):
+        juso = rows(name)
+        assert all("relJibun" in row for row in juso)
+        for row in juso:
+            lots = parse_rel_jibun(row["relJibun"])
+            assert len(lots) == len([e for e in row["relJibun"].split(",") if e.strip()])
+    campus = parse_rel_jibun(rows("single_parcel_add_info")[0]["relJibun"])
+    assert ("자양동", False, 225, 79) in campus and ("화양동", False, 4, 1) in campus
+    assert any(lot[1] for lot in parse_rel_jibun(rows("mountain_lot_add_info")[0]["relJibun"]))
