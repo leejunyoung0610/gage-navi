@@ -274,6 +274,7 @@ bulk(j, d) = c(j, d) >= 30 AND c(j, d) >= 10 * m(j)
 ### 7.2 과거 폐업 횟수와 기준율
 
 **정의 (method_version `2026.10.1`)**
+- `method_version` 규칙 (2026-10-13 결정): 기존 키의 값이 바뀌는 변경이면 버전을 올리고, 새 키만 더하는 변경이면 유지한다. T-019b는 후자(층 규모 열·`base_rate.floor_scale`의 새 값·모형 카드의 새 항목만 더했고, `floor_scale='all'` 행과 기존 항목의 값은 그대로다)라 `2026.10.1`을 유지한다
 - 층키 기록 집합 `F(pnu, floor)` — 식품 3종, `floor IS NOT NULL`, `no_fixed_place = false` (§1.1)
 - 기록 r의 과거 폐업 횟수: `prior(r) = |{ s ∈ F : s ≠ r, s.status='closed', s.closed_on < r.opened_on }|`. 같은 날 폐업·개업은 세지 않는다(`<`)
   - **두 값을 함께 저장한다**(`record_prior`): 급증일 폐업을 포함한 `prior_closures_floor`와, `s.bulk_closure = true`인 폐업을 뺀 `prior_closures_floor_ex_surge`. 계산 함수는 "세지 않을 폐업"을 인자로 받으므로 W0 정의(서울 전체 하루 100건 이상)로 뺀 값도 같은 함수로 낸다
