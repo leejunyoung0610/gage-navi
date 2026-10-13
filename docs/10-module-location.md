@@ -194,7 +194,7 @@ bulk(j, d) = c(j, d) >= 30 AND c(j, d) >= 10 * m(j)
 - 지표: 탐지 날짜 수, 기록 수를 `data_snapshot.validation`에 기록
 - 이 규칙이 말하는 것은 **"그날 그 관할에서 평소보다 훨씬 많은 폐업이 처리됐다"는 사실**뿐이다. "행정 일괄 정리"라는 해석은 검증하지 못했다(ADR-020 측정 기록). 화면 문구도 사실만 쓴다(docs/40 §4.4)
 - 측정(T-015): `python -m jobs.measure_bulk_closure` → `reports/bulk_closure.md`. 식품 3종 원천(704,141행)에서 탐지 (관할, 날짜) 495개(서로 다른 날짜 481일), 기록 45,850건. W0 방식과의 일치와 타당성 측정 결과는 ADR-020
-- 통계에서의 제외: `method_version='w0'` 재현 모드는 W0 정의(일반음식점, 서울 전체 하루 100건 이상)를 그대로 쓴다. 새 버전은 제외 없음 / 이 규칙 / W0 정의 세 가지를 T-019 민감도 분석으로 비교한다(§7.3 `sensitivity.bulk_exclusion`)
+- 통계에서의 제외: `method_version='w0'` 재현 모드는 W0 정의(일반음식점, 서울 전체 하루 100건 이상)를 그대로 쓴다. 새 버전의 **기본 설정은 이 규칙으로 제외**한다(§7.2, 2026-10-13 결정). 제외 없음 / W0 정의로 바꾼 결과는 민감도 분석으로 함께 낸다(§7.3 `sensitivity.bulk_exclusion`)
 
 ## 6. 미갱신 의심 (ADR-023)
 
@@ -275,8 +275,18 @@ bulk(j, d) = c(j, d) >= 30 AND c(j, d) >= 10 * m(j)
 - 층키 기록 집합 `F(pnu, floor)` — 식품 3종, `floor IS NOT NULL`, `no_fixed_place = false` (§1.1)
 - 기록 r의 과거 폐업 횟수: `prior(r) = |{ s ∈ F : s ≠ r, s.status='closed', s.closed_on < r.opened_on }|`. 같은 날 폐업·개업은 세지 않는다(`<`)
   - **두 값을 함께 저장한다**(`record_prior`): 급증일 폐업을 포함한 `prior_closures_floor`와, `s.bulk_closure = true`인 폐업을 뺀 `prior_closures_floor_ex_surge`. 계산 함수는 "세지 않을 폐업"을 인자로 받으므로 W0 정의(서울 전체 하루 100건 이상)로 뺀 값도 같은 함수로 낸다
-  - **어느 값을 기본으로 쓸지는 T-019의 민감도 결과(제외 없음 / 새 규칙 / W0 정의)를 보고 정한다.** 그 전까지 아래 정의의 "과거 폐업 횟수"는 포함한 값이다
-- 코호트: `opened_on ∈ [2005-01-01, 기준일 − 1095일]`, `pnu`·`floor` 있음, `r.bulk_closure = false`, `r.biz_category ≠ '편의점'` (§1.1 — 편의점 기록은 `F`에는 남아 다른 기록의 과거 폐업 횟수에는 들어간다. 포함했을 때의 결과는 §7.3 `sensitivity.convenience_store`)
+  - **기본으로 쓰는 값은 급증일 폐업을 뺀 `prior_closures_floor_ex_surge`다** (2026-10-13 결정 — 결과를 보기 전에 정했다). 아래 정의의 "과거 폐업 횟수"는 이 값이다
+- **기본 설정** (2026-10-13 결정, 결과를 보기 전에 정했다)
+
+  | 항목 | 기본 | 뜻 |
+  |---|---|---|
+  | 급증일 | 새 규칙(`bulk_closure`, §5)으로 제외 | 급증일에 폐업한 기록은 코호트에서 빼고, 과거 폐업 횟수에도 세지 않는다 |
+  | 편의점 | 제외 | 코호트에서만 뺀다(§1.1). `F`에는 남아 다른 기록의 과거 폐업 횟수에는 들어간다 |
+  | 신고 지연(미갱신 의심, §6) | 제외 없음 | |
+  | 층 미상 | 전체 | 층 미상 폐업 기록이 있는 필지도 포함 |
+  | `no_fixed_place` | 제외 | `F`에 들어가지 않는다(§1.1). 바꾸는 설정은 없다 |
+
+- 코호트: `opened_on ∈ [2005-01-01, 기준일 − 1095일]`, `pnu`·`floor` 있음, `r.bulk_closure = false`, `r.biz_category ≠ '편의점'`. 다른 설정의 결과는 §7.3 민감도
 - 결과: `event(r) = r.status='closed' AND r.closed_on − r.opened_on ≤ 1095일`
 - 버킷: `0, 1, 2, 3, 4+`
 - 범위: 서울 전체(`scope_code='11'`)와 시군구별
@@ -288,7 +298,7 @@ bulk(j, d) = c(j, d) >= 30 AND c(j, d) >= 10 * m(j)
   ```
 - **표시 조건**: 해당 버킷 `n ≥ 200`. 시군구 버킷이 조건을 만족하면 시군구 값을 주로, 서울 값을 보조로 표시. 아니면 서울 값만
 
-**화면의 "이 층의 현재 과거 폐업 횟수"** = `|{ s ∈ F : s.status='closed', s.closed_on ≤ 기준일 }|` → 버킷 매핑. 급증일 폐업을 포함할지는 위와 같이 T-019에서 정하고, T-022가 `license_record`에서 센다
+**화면의 "이 층의 현재 과거 폐업 횟수"** = `|{ s ∈ F : s.status='closed', s.bulk_closure = false, s.closed_on ≤ 기준일 }|` → 버킷 매핑. 기준율과 같은 정의로 급증일 폐업은 세지 않는다. T-022가 `license_record`에서 센다
 
 ### 7.3 모형 카드 (방법론 페이지)
 
@@ -296,21 +306,61 @@ bulk(j, d) = c(j, d) >= 30 AND c(j, d) >= 10 * m(j)
 
 ```json
 {
-  "data": {"snapshot_label": "2026-11", "license_group": "food3", "n": 171077, "event_rate": 0.321},
+  "data": {"snapshot_label": "2026-11", "license_group": "food3", "as_of": "2026-11-01",
+           "cohort_from": "2005-01-01", "cohort_to": "2023-11-02", "n": 171077, "event_rate": 0.321},
+  "default_setting": {"bulk_exclusion": "surge_rule", "convenience_store": "excluded",
+                      "exclude_stale": "none", "floor_unknown": "all"},
+  "base_rates": [{"bucket": "0", "n": 102466, "events": 29715, "rate": "0.2900", "ci": ["0.2872", "0.2928"]}],
   "logit": {
     "spec": "event ~ min(prior,5) + 개업연도 + 업태(상위10+기타) + log(면적) + 시군구 + 지하여부 + 2층이상여부",
-    "se": "층키 클러스터",
+    "se": "층키 클러스터", "n": 171077,
     "or_per_prior": 1.075, "ci": [1.063, 1.087], "p": 2.0e-38,
     "with_other_floor_control": {"or_per_prior": 1.090, "ci": [1.077, 1.103], "or_other_floor": 0.992}
   },
   "by_sigungu": [{"sigungu": "중구", "n": 7369, "or": 1.197, "ci": [1.155, 1.239]}],
   "out_of_time": {"train": "2005-2014", "test": "2015-2020", "auc_base": 0.6088, "auc_with_prior": 0.6108},
-  "sensitivity": {"bulk_as_censored": {}, "exclude_stale": {"same_ho": {}, "same_ho_or_area": {}},
-                  "bulk_exclusion": {"none": {}, "surge_rule": {}, "w0_citywide_100": {}},
-                  "convenience_store": {"excluded": {}, "included": {}}}
+  "sensitivity": {
+    "bulk_exclusion": {"none": {}, "surge_rule": {}, "w0_citywide_100": {}},
+    "convenience_store": {"excluded": {}, "included": {}},
+    "exclude_stale": {"none": {}, "same_ho": {}, "same_ho_or_area": {}},
+    "floor_unknown": {"all": {}, "exclude_parcels_with_floorless_closure": {}},
+    "bulk_as_censored": {}
+  },
+  "robustness": {"holds": true, "failures": []}
 }
 ```
-(값은 W0 일반음식점 결과 예시. 실제 값은 식품 3종으로 재계산)
+(값은 W0 일반음식점 결과 예시. 실제 값은 식품 3종으로 재계산. `base_rates`는 서울 전체)
+
+- 로지스틱 표본 = 코호트 중 `area_m2 > 0`이고 `sigungu_code`가 있는 기록(`logit.n`). 기준율 표는 면적 조건 없이 코호트 전체로 낸다
+- 다른 층 통제 변수 = 같은 필지(`pnu`, 층 미상 기록 포함)에서 개업일 전에 폐업한 기록 수 − 같은 층키의 과거 폐업 횟수, 0~20으로 자른 값. 세지 않는 폐업은 과거 폐업 횟수와 같다
+- `by_sigungu`·`out_of_time`·`with_other_floor_control`은 기본 설정에서만 계산한다
+
+**민감도 설정 (2026-10-13 결정)** — 전체 조합이 아니라 **기본 설정(§7.2)에서 한 번에 한 항목만 바꿔** 계산한다. 설정마다 결과 항목은 `{is_default, n, event_rate, buckets[{bucket, n, events, rate, ci}], logit{n, or_per_prior, ci, p}, criterion_a, criterion_b}` (버킷은 서울 전체)
+
+| 축 (`sensitivity.*`) | 값 | 정의 |
+|---|---|---|
+| `bulk_exclusion` | `none` | 급증일로 빼는 기록 없음. 코호트에 급증일 폐업 기록을 두고, 과거 폐업 횟수는 `prior_closures_floor` |
+| | **`surge_rule`** (기본) | `bulk_closure = true`인 기록을 코호트에서 빼고, 과거 폐업 횟수에도 세지 않는다(`prior_closures_floor_ex_surge`) |
+| | `w0_citywide_100` | W0 정의: `license_record`의 일반음식점 폐업 건수가 서울 전체에서 하루 100건 이상인 날에 폐업한 **일반음식점** 기록. 이 기록을 코호트에서 빼고, 과거 폐업 횟수에도 세지 않는다 |
+| `convenience_store` | **`excluded`** (기본) / `included` | `included`는 편의점 기록을 코호트에 넣는다 |
+| `exclude_stale` | **`none`** (기본) | |
+| | `same_ho` | `stale_suspect = true`인 기록을 코호트에서 뺀다 |
+| | `same_ho_or_area` | `stale_suspect` 또는 `stale_area_match`가 참인 기록을 코호트에서 뺀다 |
+| `floor_unknown` | **`all`** (기본) | |
+| | `exclude_parcels_with_floorless_closure` | 층 미상 폐업 기록(`floor IS NULL`, `status='closed'`, `no_fixed_place = false`)이 1건 이상 있는 필지의 기록을 코호트에서 뺀다. 층이 적히지 않은 옛 폐업 때문에 과거 폐업 횟수가 적게 세어질 수 있어서 본다 |
+
+- `bulk_as_censored`(ADR-020 "결과")는 참고용이고 **아래 판정에 넣지 않는다**(Wilson 구간·로지스틱이 아니라 생존 추정이라 같은 기준을 적용할 수 없다). 기본 설정에서 급증일 폐업 기록을 코호트에 두되 그 폐업을 사건이 아니라 폐업일의 중도절단으로 보고, 버킷별 1,095일 내 폐업 비율을 Kaplan–Meier(같은 날의 사건이 중도절단보다 먼저)로, 95% 구간을 Greenwood 분산으로 낸다. 항목: `{n, buckets[{bucket, n, censored, rate, ci}]}`
+
+**결론 유지 판정 기준 (2026-10-13, 결과를 보기 전에 적었다)** — 결론 = "과거 폐업이 많은 층에 새로 연 가게의 3년 내 폐업률이 더 높다". 설정 하나에서 아래 둘이 모두 참이면 그 설정에서 결론이 유지된다고 본다
+
+- **(a)** 서울 전체에서 과거 폐업 `4+` 버킷의 3년 내 폐업률이 `0` 버킷보다 높고, **두 버킷의 Wilson 95% 신뢰구간이 겹치지 않는다**(`4+`의 하한 > `0`의 상한, 반올림 전 값으로 비교)
+- **(b)** 위 로지스틱(`spec`, 층키 클러스터 표준오차)의 **과거 폐업 1회당 OR 95% 신뢰구간 하한 > 1**(`exp(β − 1.96·SE) > 1`). 적합이 수렴하지 않으면 유지되지 않은 것으로 본다
+
+판정 대상은 위 표의 9개 설정(기본 1 + 한 항목씩 바꾼 8) 전부다.
+
+- **모두 유지되면** 기본 설정의 기준율을 `base_rate`에 저장하고 화면 기준율 카드를 기본 설정으로 확정한다(`robustness.holds = true`)
+- **하나라도 깨지면** `base_rate`·`model_card`를 쓰지 않고 멈춘다. 잡은 어느 설정에서 (a)·(b) 중 무엇이 어떤 값으로 깨졌는지 출력하고 0이 아닌 코드로 끝난다. 화면 카드를 어떻게 할지는 사용자가 정한다
+- 설정별 표와 `4+` 버킷 폐업률이 설정마다 움직인 폭은 `reports/base_rates.md`에 적는다(판정과 상관없이 항상)
 
 ### 7.4 W0 재현 모드 (회귀 테스트용)
 
