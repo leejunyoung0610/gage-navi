@@ -29,7 +29,7 @@
 | `CONFLICT` | 409 | 규칙 승인 경합 등 |
 | `INTERNAL` | 500 | 그 외 (메시지는 일반 문구, 상세는 Sentry) |
 
-**호출 제한(IP 기준)**: 조회 120회/분, 평가(`*/evaluate`) 20회/분, 정정 요청 5회/시간.
+**호출 제한(IP 기준)**: 조회 120회/분(주소 검색 포함), 평가(`*/evaluate`) 20회/분, 정정 요청 5회/시간.
 **캐시**: 장소 조회 `Cache-Control: public, max-age=300` (API 앞에 CDN 없음) / 평가 `no-store`. 웹의 장소 페이지는 ISR(1일)이며, 관리자가 정정 요청으로 기록을 숨기면 API가 웹의 `POST /api/revalidate`(헤더 `x-revalidate-secret`)를 호출해 해당 `/place/{pnu}`·`/place/{pnu}/{floor}`를 즉시 재생성한다.
 
 ## 2. 공개 API
@@ -53,6 +53,14 @@
 }], "page": 1, "total": 3}}
 ```
 `has_history`: `parcel` 테이블 존재 여부.
+
+- 한 페이지 최대 10건(docs/40 §4.2). `total`은 도로명주소 API가 알려준 전체 건수
+- 응답 필드로 PNU를 만들 수 없는 항목(법정동코드·산 여부·본번·부번 중 하나라도 없거나 형식이 다름)은 `pnu`와 `has_history`가 둘 다 `null`이다. 기본값으로 채우지 않는다(ADR-003)
+- 검색어 정제: 도로명주소 API가 차단하는 특수문자(`% = < > [ ] ' " + ;`)와 SQL 예약어(낱말 단위)를 지우고 공백을 하나로 줄인 뒤 보낸다(`data/README.md` "도로명주소 검색 API 이용 조건"). 정제한 뒤 2자 미만이면 422
+- 오류: 검색어가 짧거나 도로명주소 API가 검색어를 받지 않으면(시도명만 입력 등) 422 `VALIDATION_ERROR`(`details.fields.q`에 `too_short` 또는 도로명주소 API 오류코드), `page`가 1 미만이면 422(`details.fields.page`), 호출 제한 429, 도로명주소 API 실패·승인키 없음 502 `UPSTREAM_UNAVAILABLE`, `parcel` 조회 실패 503
+- 캐시: 정제한 검색어와 페이지가 같으면 24시간 동안 도로명주소 API를 다시 부르지 않는다. 캐시에는 검색어 → 도로명주소 API 결과만 있다(요청한 사람에 관한 값 없음, 프로세스 메모리). `has_history`는 캐시하지 않고 매번 조회한다
+- **검색어는 로그에 남기지 않는다.** 접속 로그는 쿼리스트링을 지운 경로만 쓴다
+- `meta`에는 `request_id`만 있다(`data_as_of` 없음 — 이 응답의 주소는 도로명주소 API의 현재 값이다)
 
 ### `GET /api/v1/address/reverse?lat={위도}&lng={경도}`
 현재 위치 → 같은 형식 1건(카카오 좌표→주소 변환). T-032에서 구현, 실패 시 `UPSTREAM_UNAVAILABLE`.
