@@ -63,6 +63,11 @@ no_implicit_reexport = true
 strict_equality = true
 extra_checks = true
 
+# statsmodels에는 타입 정보가 없다 (호출 결과는 `Any` — 쓰는 곳에서 `float`로 바꾼다)
+[[tool.mypy.overrides]]
+module = ["statsmodels", "statsmodels.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
