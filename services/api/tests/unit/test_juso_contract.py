@@ -16,7 +16,7 @@ from jobs.record_juso_fixtures import CASES, FIXTURE_DIR
 HTTP_FIXTURE_ROOT = FIXTURE_DIR.parent
 # docs/03 D4 "사용 필드"
 USED_FIELDS = (
-    "roadAddr", "jibunAddr", "admCd", "mtYn", "lnbrMnnm", "lnbrSlno", "bdMgtSn", "bdNm",
+    "roadAddr", "jibunAddr", "admCd", "mtYn", "lnbrMnnm", "lnbrSlno", "bdMgtSn", "bdNm", "siNm",
 )  # fmt: skip
 # 승인키는 `U01TX0FVVEg`(base64 "SMS_AUTH")가 든 문자열로 발급된다
 KEY_PATTERNS = (re.compile(r"confmKey", re.I), re.compile(r"U01TX0FVVEg"))
@@ -127,3 +127,45 @@ def test_related_lots_format() -> None:
     campus = parse_rel_jibun(rows("single_parcel_add_info")[0]["relJibun"])
     assert ("자양동", False, 225, 79) in campus and ("화양동", False, 4, 1) in campus
     assert any(lot[1] for lot in parse_rel_jibun(rows("mountain_lot_add_info")[0]["relJibun"]))
+
+
+def test_related_pnus_from_recorded_add_info() -> None:
+    # T-022: 주소 검색 프록시는 `addInfoYn=Y`로 받은 관련지번을 PNU로 바꾼다 (docs/30 §2).
+    # 법정동 코드는 같은 응답의 후보(`admCd`·`siNm sggNm emdNm`)에서만 가져온다 — 지어내지 않는다.
+    from app.address.pnu import LegalDongIndex, lot_pnu
+
+    for name in ("single_parcel_add_info", "mountain_lot_add_info"):
+        juso = rows(name)
+        index = LegalDongIndex.from_rows(
+            {(r["admCd"], f"{r['siNm']} {r['sggNm']} {r['emdNm']}", False) for r in juso}
+        )
+        page = parse_response(load(name)["response"], page=1)
+        assert len(page.items) == len(juso)
+        for row, item in zip(juso, page.items, strict=True):
+            entries = [e for e in row["relJibun"].split(",") if e.strip()]
+            assert len(item.related_lots) == len(entries)  # 녹화 응답의 항목은 모두 읽힌다
+            for lot in item.related_lots:
+                pnu = lot_pnu(lot.dong_name, lot.is_san, lot.main, lot.sub, index)
+                if pnu is not None:
+                    assert pnu[:10] == index.lookup(lot.dong_name).code and len(pnu) == 19
+    first = parse_response(load("single_parcel_add_info")["response"], page=1).items[0]
+    names = {lot.dong_name for lot in first.related_lots}
+    assert names == {"서울특별시 광진구 자양동", "서울특별시 광진구 화양동"}
+    mountain = parse_response(load("mountain_lot_add_info")["response"], page=1).items[0]
+    assert any(lot.is_san for lot in mountain.related_lots)
+    assert {lot.dong_name for lot in mountain.related_lots} == {
+        "서울특별시 관악구 봉천동",
+        "서울특별시 관악구 신림동",
+    }
+
+
+def test_add_info_keeps_candidates_and_order() -> None:
+    # 검색이 `addInfoYn=Y`를 켜도 후보와 순서가 같다(T-021 후속에서 확인한 것을 고정한다)
+    for plain, extra in (
+        ("single_parcel", "single_parcel_add_info"),
+        ("mountain_lot", "mountain_lot_add_info"),
+    ):
+        a = parse_response(load(plain)["response"], page=1)
+        b = parse_response(load(extra)["response"], page=1)
+        assert a.total == b.total
+        assert [(i.pnu, i.road_addr) for i in a.items] == [(i.pnu, i.road_addr) for i in b.items]

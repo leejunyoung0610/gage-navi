@@ -14,11 +14,13 @@ from pydantic import BaseModel
 from app.address.cache import SearchCache
 from app.address.juso import (
     JusoClient,
+    JusoItem,
     JusoKeywordError,
     JusoPage,
     JusoUnavailableError,
     clean_keyword,
 )
+from app.address.pnu import LegalDongIndex, lot_pnu
 from app.core import db
 from app.core.config import get_settings
 from app.core.errors import ApiError, ErrorCode, ErrorResponse
@@ -43,6 +45,8 @@ class AddressItem(BaseModel):
     # 응답으로 필지를 정할 수 없으면 둘 다 null
     pnu: str | None
     has_history: bool | None
+    # 같은 건물의 관련지번 PNU. 법정동을 찾지 못한 지번은 뺀다 (docs/30 §2)
+    related_pnus: list[str]
 
 
 class AddressSearchData(BaseModel):
@@ -75,6 +79,16 @@ def get_juso_client() -> JusoClient:
 
 def _keyword_error(reason: str) -> ApiError:
     return ApiError(ErrorCode.VALIDATION_ERROR, KEYWORD_MESSAGE, {"fields": {"q": reason}})
+
+
+def _related_pnus(item: JusoItem, index: LegalDongIndex) -> list[str]:
+    """관련지번 → PNU. 대표 지번과 같은 값·중복은 빼고 나온 순서를 지킨다."""
+    pnus: list[str] = []
+    for lot in item.related_lots:
+        pnu = lot_pnu(lot.dong_name, lot.is_san, lot.main, lot.sub, index)
+        if pnu is not None and pnu != item.pnu and pnu not in pnus:
+            pnus.append(pnu)
+    return pnus
 
 
 async def _search(client: JusoClient, keyword: str, page: int) -> JusoPage:
@@ -119,8 +133,10 @@ async def search_address(
         raise ApiError(ErrorCode.UPSTREAM_UNAVAILABLE, UPSTREAM_MESSAGE) from None
 
     pnus = sorted({item.pnu for item in result.items if item.pnu is not None})
+    dong_names = sorted({lot.dong_name for item in result.items for lot in item.related_lots})
     try:
         with_history = await db.existing_parcels(pnus)
+        index = LegalDongIndex.from_rows(await db.legal_dong_rows(dong_names))
     except Exception as exc:
         logger.warning("address search: parcel lookup failed (%s)", type(exc).__name__)
         raise ApiError(
@@ -134,6 +150,7 @@ async def search_address(
             building_name=item.building_name,
             pnu=item.pnu,
             has_history=None if item.pnu is None else item.pnu in with_history,
+            related_pnus=_related_pnus(item, index),
         )
         for item in result.items
     ]

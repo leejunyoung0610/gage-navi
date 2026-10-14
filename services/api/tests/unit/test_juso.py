@@ -17,7 +17,9 @@ from app.address.juso import (
     JusoItem,
     JusoKeywordError,
     JusoUnavailableError,
+    RelatedLot,
     clean_keyword,
+    parse_related_lots,
     parse_response,
     pnu_from_juso,
 )
@@ -108,6 +110,51 @@ def test_parse_response() -> None:
         pnu="1121510700100470001",
     )
     assert page.items[1].building_name is None and page.items[1].pnu is None
+    assert page.items[0].related_lots == ()  # `relJibun`이 없으면 빈 목록
+
+
+@pytest.mark.parametrize(
+    ("rel_jibun", "expected"),
+    [
+        (
+            "가상시 가상구 가상동 225-79,다른동 4-1,산4-3,가상구 옛동 7",
+            [
+                ("가상시 가상구 가상동", False, 225, 79),
+                ("가상시 가상구 다른동", False, 4, 1),
+                ("가상시 가상구 다른동", True, 4, 3),
+                ("가상시 가상구 옛동", False, 7, 0),
+            ],
+        ),
+        (
+            "가상시 다른구 가상동 1,가상시 가상구 가상동 2",
+            [
+                ("가상시 다른구 가상동", False, 1, 0),
+                ("가상시 가상구 가상동", False, 2, 0),
+            ],
+        ),  # fmt: skip
+        ("4-1,4-3", []),  # 앞에 법정동 이름이 없으면 읽지 않는다
+        (
+            "가상시 가상구 가상동 4-1,가상층,12345,가상동 4-x,5",
+            [
+                ("가상시 가상구 가상동", False, 4, 1),
+                ("가상시 가상구 가상동", False, 5, 0),
+            ],
+        ),  # fmt: skip
+        ("가상시 가상구 가상동 4-1,너무 긴 다른 이름 6", [("가상시 가상구 가상동", False, 4, 1)]),
+        ("", []),
+        (None, []),
+        (123, []),
+        (["가상시 가상구 가상동 1"], []),
+    ],
+)
+def test_parse_related_lots(rel_jibun: Any, expected: list[tuple[str, bool, int, int]]) -> None:
+    lots = parse_related_lots(rel_jibun, "가상시")
+    assert [(lot.dong_name, lot.is_san, lot.main, lot.sub) for lot in lots] == expected
+
+
+def test_parse_response_reads_related_lots() -> None:
+    page = parse_response(payload([row(relJibun="가상시 가상구 가상동 4-1", siNm="가상시")]), 1)
+    assert page.items[0].related_lots == (RelatedLot("가상시 가상구 가상동", False, 4, 1),)
 
 
 def test_parse_response_no_result() -> None:
@@ -168,6 +215,7 @@ def test_client_sends_key_and_keyword_in_body_only() -> None:
         "countPerPage": str(COUNT_PER_PAGE),
         "keyword": KEYWORD,
         "resultType": "json",
+        "addInfoYn": "Y",  # 관련지번(`related_pnus`)을 같은 호출로 받는다 (docs/30 §2)
     }
 
 
