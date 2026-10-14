@@ -30,6 +30,7 @@
 | `INTERNAL` | 500 | 그 외 (메시지는 일반 문구, 상세는 Sentry) |
 
 **호출 제한(IP 기준)**: 조회 120회/분(주소 검색 포함), 평가(`*/evaluate`) 20회/분, 정정 요청 5회/시간.
+**압축**: 요청에 `Accept-Encoding: gzip`이 있고 응답 본문이 1,000바이트 이상이면 gzip으로 압축한다(T-022). 큰 목록(층 이력 `history`, 층 미상 기록 `history_without_floor`)을 자르지 않고 전부 내보내는 대신 압축한다.
 **캐시**: 장소 조회 `Cache-Control: public, max-age=300` (API 앞에 CDN 없음) / 평가 `no-store`. 웹의 장소 페이지는 ISR(1일)이며, 관리자가 정정 요청으로 기록을 숨기면 API가 웹의 `POST /api/revalidate`(헤더 `x-revalidate-secret`)를 호출해 해당 `/place/{pnu}`·`/place/{pnu}/{floor}`를 즉시 재생성한다.
 
 ## 2. 공개 API
@@ -49,15 +50,22 @@
   "jibun_addr": "서울특별시 광진구 화양동 1",
   "building_name": "○○빌딩",
   "pnu": "1121510700100010000",
-  "has_history": true
+  "has_history": true,
+  "related_pnus": ["1121510700100040001", "1121510700100040003"]
 }], "page": 1, "total": 3}}
 ```
 `has_history`: `parcel` 테이블 존재 여부.
 
+- `related_pnus`(T-022, 2026-10-14): 같은 건물의 관련지번(대표 지번이 아닌 다른 필지) PNU 목록. 검색 호출에 `addInfoYn=Y`를 켜서 **같은 한 번의 호출**로 받은 `relJibun`에서 만든다. 새 호출·새 API는 없다
+  - `relJibun`은 법정동 **이름**만 준다(`서울특별시 광진구 자양동 225-79,화양동 4-1,4-3`). 이름이 바뀔 때만 적혀 있어 앞 항목의 이름을 이어 쓰고, 이름 낱말이 시도로 시작하지 않으면 앞 이름의 끝 낱말을 그만큼 바꾼다(`화양동` → `서울특별시 광진구 화양동`). 그 이름으로 `legal_dong.full_name`을 찾아 코드를 정한다(docs/10 §2.1과 같은 조회: 현행 코드 하나 → 그 코드, 현행이 없고 폐지 코드 하나 → 그 코드, 그 밖에는 찾지 못함)
+  - 코드를 찾지 못하거나 읽을 수 없는 항목은 뺀다(기본값으로 채우지 않는다, ADR-003). 대표 지번의 PNU와 같은 값과 중복은 빼고, `relJibun`에 나온 순서를 지킨다
+  - `relJibun`이 없거나 형식이 달라도 검색은 실패시키지 않고 빈 목록이다(가이드: 추가 항목은 "추후 특정항목이 제거되거나 추가될 수 있다"). `pnu`가 `null`인 항목도 `related_pnus`는 따로 만든다
+  - 관련지번 PNU마다 `has_history`를 줄지는 T-033에서 정한다(지금은 PNU만)
+
 - 한 페이지 최대 10건(docs/40 §4.2). `total`은 도로명주소 API가 알려준 전체 건수
 - 응답 필드로 PNU를 만들 수 없는 항목(법정동코드·산 여부·본번·부번 중 하나라도 없거나 형식이 다름)은 `pnu`와 `has_history`가 둘 다 `null`이다. 기본값으로 채우지 않는다(ADR-003)
 - 검색어 정제: 도로명주소 API가 차단하는 특수문자(`% = < > [ ] ' " + ;`)와 SQL 예약어(낱말 단위)를 지우고 공백을 하나로 줄인 뒤 보낸다(`data/README.md` "도로명주소 검색 API 이용 조건"). 정제한 뒤 2자 미만이면 422
-- 오류: 검색어가 짧거나 도로명주소 API가 검색어를 받지 않으면(시도명만 입력 등) 422 `VALIDATION_ERROR`(`details.fields.q`에 `too_short` 또는 도로명주소 API 오류코드), `page`가 1 미만이면 422(`details.fields.page`), 호출 제한 429, 도로명주소 API 실패·승인키 없음 502 `UPSTREAM_UNAVAILABLE`, `parcel` 조회 실패 503
+- 오류: 검색어가 짧거나 도로명주소 API가 검색어를 받지 않으면(시도명만 입력 등) 422 `VALIDATION_ERROR`(`details.fields.q`에 `too_short` 또는 도로명주소 API 오류코드), `page`가 1 미만이면 422(`details.fields.page`), 호출 제한 429, 도로명주소 API 실패·승인키 없음 502 `UPSTREAM_UNAVAILABLE`, `parcel`·`legal_dong` 조회 실패 503
 - 캐시: 정제한 검색어와 페이지가 같으면 24시간 동안 도로명주소 API를 다시 부르지 않는다. 캐시에는 검색어 → 도로명주소 API 결과만 있다(요청한 사람에 관한 값 없음, 프로세스 메모리). `has_history`는 캐시하지 않고 매번 조회한다
 - **검색어는 로그에 남기지 않는다.** 접속 로그는 쿼리스트링을 지운 경로만 쓴다
 - `meta`에는 `request_id`만 있다(`data_as_of` 없음 — 이 응답의 주소는 도로명주소 API의 현재 값이다)
@@ -78,13 +86,18 @@
   "history_without_floor": [{
     "record_id": 880, "name": "○○식당", "license_type": "general_restaurant", "biz_category": "한식",
     "opened_on": "1998-05-11", "closed_on": "2003-02-28", "status": "closed", "tenure_days": 1754,
-    "ho_list": [], "bulk_closure": false
+    "ho_list": [], "bulk_closure": false, "bulk_closure_detail": null
   }]
-}}
+}, "meta": {"request_id": "01J…", "data_as_of": "2026-11-01"}}
 ```
+- 오류: PNU가 19자리 숫자가 아니면 422 `VALIDATION_ERROR`(`details.fields.pnu`), `parcel`에 없으면 404 `NO_HISTORY`, DB 실패 503
+- `jibun_label`·`road_addr`·`location`은 `parcel`(docs/10 §7.1 빌드). `location`은 좌표가 없으면 `null`
+- `floors`: `parcel.floors` 순서(B2, B1, 1, 2, …, RF)의 층마다 `floor_summary`의 `record_count`·`open_now_count`
+- `meta.data_as_of`: 이력 기준일 = `validated` 스냅샷의 `source_updated_max` 중 가장 이른 날짜(Asia/Seoul) — `jobs.build_history`의 기본 기준일과 같다. 진행 일수 `tenure_days`도 이 날짜로 센다
 - `records_without_floor`: 층 정보가 없어 층 이력에 포함되지 않은 기록 수
 - `history_without_floor`: 그 기록들의 목록(T-018에서 결정, 2026-10-13). `opened_on` 오름차순, 항목은 층 이력의 `history`와 같되 `stale_suspect`는 없다(층키가 있어야 판정한다). 숨김 기록(`record_suppression`)과 `no_fixed_place` 기록은 뺀다. 기준율(`base_rate`)·`notices`는 주지 않는다. `len(history_without_floor) = records_without_floor`
-  - 한 필지의 층 미상 기록은 99번째 백분위 16건, 최대 617건이다(2026-10 데이터). 응답 크기 제한이 필요한지는 T-022에서 정한다
+  - **응답 크기 제한은 두지 않는다**(T-022에서 결정, 2026-10-14). 층 이력 `history`도 같은 원칙으로 전부 내보낸다. 큰 응답은 압축하고(§1), 화면은 처음 일부만 그리고 나머지는 "전체 보기"로 그린다(데이터는 다 받는다, T-033)
+  - 측정(2026-10 데이터): 층 미상 기록이 있는 필지 115,086곳, 필지당 99번째 백분위 16건, 최대 617건. 50건 넘는 필지 113곳, 100건 넘는 29곳, 200건 넘는 6곳. 압축 전후 크기는 아래 "응답 크기" 
 - `floors`가 비어 있고 `records_without_floor > 0`인 필지도 정상 응답이다(층 정보가 하나도 없는 필지)
 
 ### `GET /api/v1/places/{pnu}/floors/{floor}`
@@ -96,7 +109,8 @@
   "history": [{
     "record_id": 1032, "name": "○○분식", "license_type": "general_restaurant", "biz_category": "분식",
     "opened_on": "2011-03-02", "closed_on": "2013-08-30", "status": "closed", "tenure_days": 912,
-    "ho_list": ["101"], "bulk_closure": false, "stale_suspect": false
+    "ho_list": ["101"], "bulk_closure": true, "stale_suspect": false,
+    "bulk_closure_detail": {"jurisdiction_label": "광진구", "closure_count": 412}
   }],
   "ho_groups": [{"ho": "101", "record_ids": [1032, 2210]}],
   "base_rate": {
@@ -111,10 +125,19 @@
   "data_as_of": "2026-11-01"
 }}
 ```
+- 오류: PNU 형식 422(`details.fields.pnu`), 층 형식(`B1`~`B9`, `1`~`99`, `RF`)이 아니면 422(`details.fields.floor`), 필지 또는 그 층의 `floor_summary`가 없으면 404 `NO_HISTORY`, DB 실패 503. `meta.data_as_of`는 필지 응답과 같다
+- `summary`: `floor_summary`(docs/10 §7.1)
+- `history`: 층 이력(docs/10 §7.1). 응답 크기 제한 없음(위 필지 응답과 같은 원칙). 한 층키의 기록은 최대 2,370건이다(2026-10 데이터)
+- `bulk_closure_detail`(T-022, 2026-10-14): `bulk_closure = true`인 기록에 `closure_surge_day`의 그날(관할 = 기록의 `jurisdiction_code`, 날짜 = `closed_on`) `jurisdiction_label`·`closure_count`. 화면 배지 설명 "이날 {관할 이름}에서 … 처리됐어요({n}건)"(docs/40 §4.4)에 쓴다. `bulk_closure = false`이면 `null`. 관할 이름을 정할 수 없었으면(`jurisdiction_label`이 NULL) `jurisdiction_label: null`이고 건수는 그대로 준다. 필지 응답의 `history_without_floor`에도 같은 필드가 있다
+- `ho_groups`: 이 층 이력에서 `ho_list`의 같은 원소를 가진 기록이 2건 이상인 호마다 1개, `record_ids`는 이력 순서. `ho` 문자열 오름차순
+- `base_rate`: 기준율 모형 카드가 아직 계산되지 않았으면(`method_version='w0'`이 아닌 `model_card`가 없으면) `null`. 쓰는 카드는 그런 카드 중 가장 최근 것(`id` 최대)이고, `base_rate` 행은 그 카드와 같은 `snapshot_label`·`method_version`이다
+  - `prior_closures_now`: 이 층의 현재 과거 폐업 횟수(docs/10 §7.2 "화면의 이 층의 현재 과거 폐업 횟수", `F` 기준), `bucket`은 그 버킷(`0`~`3`, `4+`). `display`와 상관없이 준다
+  - 기준율 선택(`display=true`): `primary` = 같은 규모·같은 버킷의 시군구(PNU 앞 5자리) 행이 `n ≥ 200`이면 그 행, 아니면 서울(`11`) 행. `secondary` = `primary`가 시군구일 때만 서울 행, 아니면 `null`. `baseline` = `primary`와 같은 범위의 같은 규모 `0` 버킷 행이 `n ≥ 200`이면 그 행, 아니면 서울 `0` 버킷 행
+  - `snapshot_label`·`method_version`: 쓴 카드의 값. `display=false`여도 준다
 - `floor_scale`: 이 층의 규모 `single`(동시에 영업한 최대 점포 수 1) / `small`(2~9) / `large`(10 이상). `summary.max_concurrent`로 정한다(docs/10 §7.2). `primary`·`baseline`·`secondary`는 **이 규모의 기준율**(`base_rate.floor_scale`)이다 (T-019b, 응답 구현은 T-022)
 - `display=false`이면 `hidden_reason`은 둘 중 하나다. 이때 `primary`·`baseline`·`secondary`는 `null`
   - `"not_confirmed_for_floor_scale"`: 이 규모에서 결론 유지 판정 (a)(b)가 깨졌다(최신 `model_card.payload.by_floor_scale.{규모}.holds = false`, docs/10 §7.3). 화면 문구는 docs/40 §4.4. 규모로 나누지 않은 값으로 대신하지 않는다. 이 값이 먼저다
-  - `"insufficient_sample"`: 이 규모의 해당 버킷 n < 200(시군구·서울 모두)
+  - `"insufficient_sample"`: 이 규모의 해당 버킷 n < 200(시군구·서울 모두). 행이 없는 경우도 여기에 든다
 - `notices` 값과 발생 조건: docs/10 §7.1
 - `stale_suspect`는 같은 호 근거만이다. 면적 근거 `stale_area_match`는 응답에 넣지 않는다 (docs/10 §6)
 - 숨김 처리된 기록(`record_suppression`)은 응답에서 제외
