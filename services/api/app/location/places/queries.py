@@ -55,11 +55,13 @@ WHERE r.pnu = :pnu AND NOT r.no_fixed_place
 ORDER BY r.opened_on NULLS LAST, r.id
 """
 
-# 화면의 "이 층의 현재 과거 폐업 횟수": `F`(숨김 포함)에서 급증일 폐업을 뺀 폐업 수 (docs/10 §7.2)
+# 화면의 "이 층의 현재 과거 폐업 횟수": `F`에서 급증일 폐업과 숨김 기록을 뺀 폐업 수
+# (docs/10 §7.2). 화면 이력과 같은 기록만 센다. 기준율 통계(`F`)는 숨김 기록을 포함한다
 _PRIOR_NOW = """
-SELECT count(*) FROM license_record
-WHERE pnu = :pnu AND floor = :floor AND NOT no_fixed_place
-  AND status = 'closed' AND NOT bulk_closure AND closed_on <= :as_of
+SELECT count(*) FROM license_record r
+WHERE r.pnu = :pnu AND r.floor = :floor AND NOT r.no_fixed_place
+  AND r.status = 'closed' AND NOT r.bulk_closure AND r.closed_on <= :as_of
+  AND NOT EXISTS (SELECT 1 FROM record_suppression x WHERE x.record_id = r.id)
 """
 
 # 알림 `pre_2005_floor_missing`: 같은 필지(`H`)의 층 정보 없는 기록 중 2005년 전 개업

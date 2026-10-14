@@ -31,7 +31,7 @@ PHONE_MARKER = "가상전화 000-0000-0000"  # 가상 예시: 원본 행(`licens
 # (id, 관리번호, 상태, 개업일, 폐업일, 층, 호, 급증일, 미갱신 의심, 고정된 자리 없음, 필지)
 Row = tuple[int, str, str, str | None, str | None, str | None, str, bool, bool, bool, str]
 RECORDS: list[Row] = [
-    # 1층 (단독): 폐업 2건 중 1건은 급증일 → 현재 과거 폐업 = A1 + 숨김 A4 = 2
+    # 1층 (단독): 폐업 A1·A2·A4 중 급증일 A2와 숨김 A4는 세지 않는다 → 현재 과거 폐업 = A1 = 1
     (11, "A1", "closed", "2006-01-01", "2010-06-30", "1", "{101}", False, False, False, P_MAIN),
     (12, "A2", "closed", "2010-08-01", "2012-03-31", "1", "{101}", True, False, False, P_MAIN),
     (13, "A3", "open", "2012-04-01", None, "1", "{101,102}", False, True, False, P_MAIN),
@@ -64,9 +64,11 @@ SUMMARIES = [
 ]
 # (스냅샷, 규모, 범위, 버킷, n) — 비율은 n과 상관없는 가상 값
 RATES = [
-    (SNAPSHOT, "single", GU, "2", 250),
+    (SNAPSHOT, "single", GU, "1", 250),
+    (SNAPSHOT, "single", GU, "2", 9000),  # 숨김 A4를 세면 고르게 되는 행: 쓰이면 안 된다
     (SNAPSHOT, "single", GU, "0", 900),
-    (SNAPSHOT, "single", SEOUL, "2", 21000),
+    (SNAPSHOT, "single", SEOUL, "1", 21000),
+    (SNAPSHOT, "single", SEOUL, "3", 500),
     (SNAPSHOT, "single", SEOUL, "0", 130000),
     (SNAPSHOT, "single", SEOUL, "4+", 150),
     (SNAPSHOT, "small", GU, "0", 150),
@@ -278,8 +280,8 @@ def test_single_scale_uses_sigungu_when_n_is_enough(api: TestClient) -> None:
     rate = floor(api, "1")["base_rate"]
     assert rate["display"] is True and rate["hidden_reason"] is None
     assert rate["floor_scale"] == "single"
-    # 과거 폐업: A1 + 숨김 A4(통계 집합 F에 남는다). 급증일 폐업 A2는 세지 않는다
-    assert rate["prior_closures_now"] == 2 and rate["bucket"] == "2"
+    # 과거 폐업: A1만. 급증일 폐업 A2와 숨김 A4는 세지 않는다 (docs/10 §7.2 화면 정의)
+    assert rate["prior_closures_now"] == 1 and rate["bucket"] == "1"
     assert rate["primary"] == {
         "scope_code": GU,
         "scope_label": "가상구",
@@ -413,3 +415,19 @@ def test_place_response_no_phone(api: TestClient) -> None:
         assert PHONE_MARKER not in response.text and "000-0000-0000" not in response.text
     schema = json.dumps(api.get("/openapi.json").json()["components"]["schemas"])
     assert re.search(r'"(phone|tel)\w*"', schema, re.I) is None
+
+
+def test_hidden_record_changes_bucket(api: TestClient, migrated_db_url: str) -> None:
+    # 지하 1층: 폐업 4건 → 4+ (서울 n 150, 숨김). D4를 숨기면 3건 → 버킷 3 (서울 n 500, 표시)
+    before = floor(api, "B1")["base_rate"]
+    assert before["bucket"] == "4+" and before["hidden_reason"] == "insufficient_sample"
+    _run(
+        migrated_db_url, ["INSERT INTO record_suppression (record_id, reason) VALUES (44, '가상')"]
+    )
+    data = floor(api, "B1")
+    after = data["base_rate"]
+    assert after["prior_closures_now"] == 3 and after["bucket"] == "3"
+    assert after["display"] is True and after["primary"]["n"] == 500
+    # 화면 이력에서 빠진 기록 수와 숫자가 맞는다
+    closed = [r for r in data["history"] if r["status"] == "closed" and not r["bulk_closure"]]
+    assert len(closed) == after["prior_closures_now"]
