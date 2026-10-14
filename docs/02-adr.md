@@ -243,3 +243,5 @@
 | 2026-10-13 | pandas-stubs (dev) | `app/location`은 mypy strict인데 pandas에 타입 정보가 없어 `import pandas`가 오류가 된다 (T-015 폐업 처리 급증일 탐지가 첫 사용) | pandas만 `ignore_missing_imports`(pandas 호출이 전부 `Any`가 돼 strict의 의미가 없어진다) |
 | 2026-10-14 | argon2-cffi | 관리자 비밀번호 해시(argon2id, docs/01 §6, T-023). `PasswordHasher`의 기본 매개변수와 재해시 판단(`check_needs_rehash`)을 쓴다 | passlib(유지보수 정체, argon2-cffi를 다시 감쌀 뿐), 표준 라이브러리 `hashlib.scrypt`(문서가 argon2로 정함) |
 | 2026-10-14 | gitleaks 8.30.1 (CI 도구) | 비밀 값 커밋 방지 — PR·push마다 전체 기록 검사(`.github/workflows/secrets.yml`, ADR-029). 공식 릴리스 바이너리를 버전·SHA-256으로 고정해 받는다 | gitleaks-action(조직 계정은 라이선스 키 필요, 동작이 액션 버전에 묶임), trufflehog |
+| 2026-10-14 | zod 4 | 프로필 저장값 검증(`lib/profile-store.ts`)과 `/api/revalidate` 본문 검증 (T-030). docs/01 §2 초기 스택(react-hook-form + zod)에 있던 것을 처음 설치 | 손으로 쓴 타입 가드(필드가 늘면 T-061에서 다시 써야 함) |
+| 2026-10-14 | @serwist/next 9, serwist 9 (dev) | 서비스 워커(정적 자산 캐시 우선, `/place/*` 네트워크 우선, 평가 요청 캐시 금지 — docs/40 §8, T-030). docs/01 §2 초기 스택. 워커는 `next build`에서만 만들어 `public/sw.js`(gitignore)에 쓴다 | next-pwa(유지보수 중단), 직접 쓴 서비스 워커(precache 목록을 빌드에서 뽑아야 함) |

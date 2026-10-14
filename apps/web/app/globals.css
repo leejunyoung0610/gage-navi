@@ -1,1 +1,39 @@
 @import "tailwindcss";
+
+/* 디자인 토큰 (docs/40 §1): 본문 17px·줄 간격 1.6, 단일 열 최대 720px, 터치 영역 44px */
+@theme {
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR",
+    "Malgun Gothic", sans-serif;
+
+  --text-base: 1.0625rem;
+  --text-base--line-height: 1.6;
+
+  --color-brand: #0f766e;
+  --color-brand-strong: #115e59;
+  --color-ink: #171717;
+  --color-muted: #525252;
+  --color-line: #e5e5e5;
+  --color-surface: #fafafa;
+  --color-beta-bg: #fef3c7;
+  --color-beta-ink: #78350f;
+
+  --container-page: 45rem;
+  --spacing-touch: 2.75rem;
+}
+
+@layer base {
+  html {
+    font-size: 100%;
+  }
+  body {
+    font-size: var(--text-base);
+    line-height: var(--text-base--line-height);
+    word-break: keep-all;
+  }
+  /* 포커스 표시 (WCAG 2.1 AA) */
+  :focus-visible {
+    outline: 3px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+}

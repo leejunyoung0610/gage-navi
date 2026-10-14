@@ -33,9 +33,11 @@ services:
       - ./storage:/app/storage     # 공고 첨부 원문 등 앱이 쓰는 파일 (gitignore)
 
   web:
-    profiles: ["web"]              # Dockerfile이 생기는 T-030에서 뗀다. 그 전에는 기본 `up`에서 제외
     build:
-      context: ./apps/web          # Dockerfile은 T-030에서 작성
+      context: ./apps/web
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8000   # 브라우저용 값은 빌드할 때 번들에 들어간다
+        INDEXING_ENABLED: ${INDEXING_ENABLED:-false}      # 정적 페이지의 noindex도 빌드 때 정해진다
     env_file: .env
     environment:
       API_INTERNAL_URL: http://api:8000         # 서버 컴포넌트(SSR/ISR)의 API 호출용

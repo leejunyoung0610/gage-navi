@@ -20,9 +20,11 @@
     "gen:api": "echo 'gen:api는 T-031에서 구현해요 (openapi-typescript)' && exit 1"
   },
   "dependencies": {
+    "@serwist/next": "9.5.13",
     "next": "^15.5.27",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.7",
@@ -36,6 +38,7 @@
     "eslint-config-prettier": "^10.1.8",
     "postcss": "^8.5.29",
     "prettier": "^3.9.10",
+    "serwist": "9.5.13",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
     "vitest": "^5.0.3"

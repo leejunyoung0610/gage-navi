@@ -32,6 +32,9 @@ next-env.d.ts
 out/
 apps/web/test-results/
 apps/web/playwright-report/
+apps/web/public/sw.js
+apps/web/public/sw.js.map
+apps/web/public/swe-worker-*.js
 
 # OS / editor
 .DS_Store

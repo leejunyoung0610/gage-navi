@@ -11,6 +11,8 @@ const config = [
       "next-env.d.ts",
       "playwright-report/**",
       "test-results/**",
+      "public/sw.js",
+      "public/swe-worker-*.js",
     ],
   },
   ...compat.extends("next/core-web-vitals", "next/typescript", "prettier"),
