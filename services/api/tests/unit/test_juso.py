@@ -193,3 +193,25 @@ def test_client_errors_do_not_carry_key_or_keyword(handler: Any) -> None:
     assert exc.__context__ is None or exc.__suppress_context__
     assert FAKE_KEY not in str(exc) and FAKE_KEY not in repr(exc)
     assert KEYWORD not in text and "가상로" not in str(exc)
+
+
+def test_transport_error_reason_is_marked_connection() -> None:
+    with pytest.raises(JusoUnavailableError) as caught:
+        run_search(_raises_timeout)
+    assert caught.value.reason == "connection_ConnectTimeout"
+
+
+def test_client_timeout_is_passed_to_request() -> None:
+    seen: list[Any] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.append(request.extensions["timeout"])
+        return httpx2.Response(200, json=payload([row()]))
+
+    async def go() -> None:
+        async with httpx2.AsyncClient(transport=httpx2.MockTransport(handler)) as http:
+            await JusoClient(FAKE_KEY, http, timeout=10.0).search(KEYWORD, 1)
+            await JusoClient(FAKE_KEY, http).search(KEYWORD, 1)
+
+    asyncio.run(go())
+    assert [t["read"] for t in seen] == [10.0, 5.0]
