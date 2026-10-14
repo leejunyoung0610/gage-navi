@@ -25,7 +25,7 @@ from app.core import db
 from app.core.config import get_settings
 from app.core.errors import ApiError, ErrorCode, ErrorResponse
 from app.core.ratelimit import limit_lookup
-from app.core.request_id import new_request_id
+from app.core.request_id import current_request_id
 
 logger = logging.getLogger(__name__)
 
@@ -156,5 +156,5 @@ async def search_address(
     ]
     return AddressSearchResponse(
         data=AddressSearchData(items=items, page=result.page, total=result.total),
-        meta=Meta(request_id=new_request_id()),
+        meta=Meta(request_id=current_request_id()),
     )

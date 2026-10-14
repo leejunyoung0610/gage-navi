@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from app.core.request_id import new_request_id
+from app.core.request_id import RequestIdMiddleware, current_request_id
 
 
 class ErrorCode(StrEnum):
@@ -86,11 +86,10 @@ def _response(
     message: str,
     details: dict[str, Any] | None = None,
     headers: dict[str, str] | None = None,
-    request_id: str | None = None,
 ) -> JSONResponse:
     body = ErrorResponse(
         error=ErrorBody(code=code, message=message, details=details or {}),
-        meta=ErrorMeta(request_id=request_id or new_request_id()),
+        meta=ErrorMeta(request_id=current_request_id()),
     )
     return JSONResponse(
         status_code=HTTP_STATUS[code], content=body.model_dump(mode="json"), headers=headers
@@ -148,15 +147,10 @@ class UnhandledErrorMiddleware:
         try:
             await self.app(scope, receive, send_tracking)
         except Exception as exc:
-            request_id = new_request_id()
-            logger.error(
-                "unhandled %s request_id=%s path=%s",
-                type(exc).__name__,
-                request_id,
-                scope.get("path", ""),
-            )
+            # 요청 ID는 로그 설정이 붙인다 (`app.core.logging`)
+            logger.error("unhandled %s path=%s", type(exc).__name__, scope.get("path", ""))
             if not started:
-                response = _response(ErrorCode.INTERNAL, INTERNAL_MESSAGE, request_id=request_id)
+                response = _response(ErrorCode.INTERNAL, INTERNAL_MESSAGE)
                 await response(scope, receive, send)
 
 
@@ -164,3 +158,5 @@ def register_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(ApiError, _handle_api_error)
     app.add_exception_handler(RequestValidationError, _handle_validation_error)
     app.add_middleware(UnhandledErrorMiddleware)
+    # 바깥에 둔다: 500 응답·로그도 같은 요청 ID를 쓰고 헤더에 실린다
+    app.add_middleware(RequestIdMiddleware)

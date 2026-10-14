@@ -8,6 +8,9 @@ from fastapi.testclient import TestClient
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.errors import INTERNAL_MESSAGE, register_error_handlers
+from app.core.logging import configure_logging
+
+configure_logging()
 
 SECRET_INPUT = "가상 연락처 010-0000-0000"  # 가상 예시
 
@@ -71,5 +74,7 @@ def test_unhandled_exception_is_internal_with_generic_message(
     assert body["error"] == {"code": "INTERNAL", "message": INTERNAL_MESSAGE, "details": {}}
     assert SECRET_INPUT not in response.text
     # 로그에는 요청 ID·경로·예외 종류만
-    assert "RuntimeError" in caplog.text and body["meta"]["request_id"] in caplog.text
+    errors = [r for r in caplog.records if r.name == "app.core.errors"]
+    assert "RuntimeError" in caplog.text
+    assert [r.request_id for r in errors] == [body["meta"]["request_id"]]  # type: ignore[attr-defined]
     assert SECRET_INPUT not in caplog.text

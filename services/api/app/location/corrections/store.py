@@ -139,7 +139,7 @@ async def list_requests(
 
 
 async def resolve(
-    conn: AsyncConnection, request_id: int, action: Action, note: str | None, now: datetime
+    conn: AsyncConnection, correction_id: int, action: Action, note: str | None, now: datetime
 ) -> Resolved | ResolveProblem:
     """요청을 처리한다. 숨기면 같은 트랜잭션에서 그 필지의 요약을 다시 만든다(docs/10 §7.1)."""
     row = (
@@ -147,7 +147,7 @@ async def resolve(
             text(
                 "SELECT status, record_id, kind FROM correction_request WHERE id = :id FOR UPDATE"
             ),
-            {"id": request_id},
+            {"id": correction_id},
         )
     ).first()
     if row is None:
@@ -171,7 +171,7 @@ async def resolve(
                 "INSERT INTO record_suppression (record_id, reason, request_id) "
                 "VALUES (:record_id, :reason, :request_id) ON CONFLICT (record_id) DO NOTHING"
             ),
-            {"record_id": record_id, "reason": kind, "request_id": request_id},
+            {"record_id": record_id, "reason": kind, "request_id": correction_id},
         )
         if pnu is not None:
             await rebuild_parcel(conn, str(pnu))
@@ -182,9 +182,9 @@ async def resolve(
             "UPDATE correction_request SET status = :status, resolution_note = :note, "
             "resolved_at = :now WHERE id = :id"
         ),
-        {"status": new_status, "note": note, "now": now, "id": request_id},
+        {"status": new_status, "note": note, "now": now, "id": correction_id},
     )
-    return Resolved(id=request_id, status=new_status, paths=paths)
+    return Resolved(id=correction_id, status=new_status, paths=paths)
 
 
 async def pending_revalidations(conn: AsyncConnection) -> list[tuple[int, list[str]]]:
@@ -193,8 +193,8 @@ async def pending_revalidations(conn: AsyncConnection) -> list[tuple[int, list[s
     return [(int(rid), place_paths(str(pnu), floor)) for rid, pnu, floor in rows]
 
 
-async def mark_revalidated(conn: AsyncConnection, request_id: int, now: datetime) -> None:
+async def mark_revalidated(conn: AsyncConnection, correction_id: int, now: datetime) -> None:
     await conn.execute(
         text("UPDATE correction_request SET revalidated_at = :now WHERE id = :id"),
-        {"now": now, "id": request_id},
+        {"now": now, "id": correction_id},
     )

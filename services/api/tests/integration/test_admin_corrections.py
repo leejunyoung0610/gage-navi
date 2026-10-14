@@ -195,6 +195,7 @@ def submit(client: TestClient, record_id: int | None, pnu: str = P1, **extra: An
     response = client.post(f"/api/v1/places/{pnu}/corrections", json=body)
     assert response.status_code == 201, response.text
     assert response.headers["cache-control"] == "no-store"
+    assert response.headers["x-request-id"] == response.json()["meta"]["request_id"]
     correction_id: int = response.json()["data"]["id"]
     return correction_id
 
@@ -502,3 +503,28 @@ def test_messages_deleted_one_year_after_resolution(client: TestClient, seeded: 
     assert fetch(
         seeded, "SELECT count(*) FROM correction_request WHERE resolved_at IS NOT NULL"
     ) == [(2,)]
+
+
+def test_error_id_shown_to_user_finds_server_log(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """사용자가 오류 화면의 ID를 알려 주면 그 요청의 로그를 찾을 수 있다 (docs/30 §1)."""
+    from app.location.corrections import store
+
+    async def broken(*_: Any) -> int:
+        raise RuntimeError("가상 DB 장애")
+
+    submit(client, None)
+    monkeypatch.setattr(store, "create", broken)
+    with caplog.at_level(logging.INFO, logger="app"):
+        response = client.post(
+            f"/api/v1/places/{P1}/corrections", json={"kind": "other", "message": CONTACT}
+        )
+    assert response.status_code == 503
+    shown = response.json()["meta"]["request_id"]
+    assert response.headers["x-request-id"] == shown
+    found = [r for r in caplog.records if getattr(r, "request_id", None) == shown]
+    names = {r.name for r in found}
+    assert {"app.location.corrections.router", "app.access"} <= names
+    assert any("RuntimeError" in r.getMessage() for r in found)
+    assert all(CONTACT not in r.getMessage() for r in caplog.records)
