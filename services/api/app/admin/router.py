@@ -8,7 +8,8 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
+from pydantic_core import PydanticCustomError
 
 from app.admin import auth, revalidate
 from app.admin.auth import Admin, LoginLocked, LoginOk
@@ -77,7 +78,17 @@ class CorrectionList(BaseModel):
 class ResolveIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     action: Action
-    note: Annotated[str, Field(max_length=NOTE_MAX)] | None = None
+    note: Annotated[str, Field(max_length=NOTE_MAX)] | None = Field(
+        default=None, validate_default=True
+    )
+
+    @field_validator("note")
+    @classmethod
+    def _note_required_for_reject(cls, note: str | None, info: ValidationInfo) -> str | None:
+        """`none`(→ `rejected`)은 거절 사유가 있어야 한다. 비었거나 공백뿐이면 422."""
+        if info.data.get("action") == "none" and not (note or "").strip():
+            raise PydanticCustomError("note_required", "거절 사유를 적어 주세요.")
+        return note
 
 
 class ResolveData(BaseModel):
