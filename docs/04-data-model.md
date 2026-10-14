@@ -1,6 +1,6 @@
 # 04. 데이터 모델 (PostgreSQL 16 + PostGIS)
 
-> 마이그레이션은 Alembic으로만. §2 = `0001_location`(T-003) + `0003_normalize`(T-016: `license_record.no_fixed_place`, `closure_surge_day`) + `0004_stale_area`(T-017: `license_record.stale_area_match`) + `0005_prior_ex_surge`(T-018: `record_prior.prior_closures_floor_ex_surge`) + `0006_floor_scale`(T-019b: `floor_summary.max_concurrent`, `record_prior.max_concurrent_at_open`, `base_rate.floor_scale`), §3 = `0002_rules`(T-005). 아래 DDL은 기준 명세이며, 구현 시 이름·타입·제약을 그대로 따른다. 변경은 이 문서를 먼저 고친다.
+> 마이그레이션은 Alembic으로만. §2 = `0001_location`(T-003) + `0003_normalize`(T-016: `license_record.no_fixed_place`, `closure_surge_day`) + `0004_stale_area`(T-017: `license_record.stale_area_match`) + `0005_prior_ex_surge`(T-018: `record_prior.prior_closures_floor_ex_surge`) + `0006_floor_scale`(T-019b: `floor_summary.max_concurrent`, `record_prior.max_concurrent_at_open`, `base_rate.floor_scale`), §3 = `0002_rules`(T-005). `0007_admin_auth`(T-023)는 §2 `correction_request.revalidated_at`과 §3 `admin_user` 잠금 컬럼·`admin_session`을 더한다. 아래 DDL은 기준 명세이며, 구현 시 이름·타입·제약을 그대로 따른다. 변경은 이 문서를 먼저 고친다.
 
 ## 1. 공통 규칙
 
@@ -162,7 +162,8 @@ CREATE TABLE model_card (
   UNIQUE (snapshot_label, method_version)
 );
 
--- 정정·삭제 요청 (연락처 수집 안 함)
+-- 정정·삭제 요청 (연락처 필드 없음. 자유 입력 `message`에 연락처가 들어올 수 있어 로그에 남기지 않고,
+-- 처리(`resolved_at`) 후 1년이 지나면 `message`를 빈 문자열로 지운다 — 행·처리 결과는 처리 기록으로 남긴다, docs/60 §3·§5)
 CREATE TABLE correction_request (
   id          BIGSERIAL PRIMARY KEY,
   pnu         CHAR(19) NOT NULL,
@@ -173,7 +174,8 @@ CREATE TABLE correction_request (
   status      TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','resolved','rejected')),
   resolution_note TEXT,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-  resolved_at TIMESTAMPTZ
+  resolved_at TIMESTAMPTZ,
+  revalidated_at TIMESTAMPTZ               -- 숨김 처리 뒤 웹 재생성 호출이 성공한 시각 (T-023). NULL이면 재시도 대상
 );
 
 -- 숨김 처리 (정정 요청 승인 결과)
@@ -350,9 +352,25 @@ CREATE TABLE eval_run (
 CREATE TABLE admin_user (
   id            BIGSERIAL PRIMARY KEY,
   username      TEXT NOT NULL UNIQUE,
-  password_hash TEXT NOT NULL,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  password_hash TEXT NOT NULL,              -- argon2id
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- 로그인 잠금 (T-023, docs/30 §3): 첫 실패부터 10분 안에 5회 실패하면 15분 잠금.
+  -- 재시작·여러 워커에서도 유지되도록 DB에 둔다
+  failed_login_count      INT NOT NULL DEFAULT 0,
+  failed_login_started_at TIMESTAMPTZ,      -- 지금 세는 실패 창의 첫 실패 시각
+  locked_until            TIMESTAMPTZ
 );
+
+-- 관리자 세션 (T-023). 쿠키에는 무작위 32바이트 토큰, DB에는 그 SHA-256 해시만 저장한다.
+-- 로그인 후 8시간(`expires_at`) 또는 마지막 요청 후 30분이 지나면 만료. 로그아웃·비밀번호 변경 시 지운다
+CREATE TABLE admin_session (
+  token_hash    BYTEA PRIMARY KEY,
+  admin_user_id BIGINT NOT NULL REFERENCES admin_user(id) ON DELETE CASCADE,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_seen_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at    TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX ON admin_session (admin_user_id);
 ```
 
 충돌·한도 그룹·순서 효과는 규칙 `body` 안에 저장한다(docs/20 §2). 엔진은 승인 규칙 로드 시 이를 모아 그래프를 만든다.
