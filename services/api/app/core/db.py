@@ -32,7 +32,8 @@ def get_engine() -> AsyncEngine:
     url = get_settings().database_url
     if url is None:
         raise DatabaseNotConfiguredError("DATABASE_URL이 설정되지 않았습니다")
-    return create_async_engine(url, pool_pre_ping=True)
+    # 오류 메시지에 SQL 인자(정정 요청 메시지 등)를 넣지 않는다 (docs/30 §1 `INTERNAL`)
+    return create_async_engine(url, pool_pre_ping=True, hide_parameters=True)
 
 
 async def ping_db() -> None:

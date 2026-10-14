@@ -9,6 +9,7 @@ from fastapi import Request
 from app.core.errors import ApiError, ErrorCode
 
 LOOKUP_LIMIT_PER_MINUTE = 120  # 조회 API (docs/30 §1)
+CORRECTION_LIMIT_PER_HOUR = 5  # 정정 요청 (docs/30 §1)
 _PURGE_THRESHOLD = 10_000
 
 
@@ -44,15 +45,25 @@ class RateLimiter:
 
 
 lookup_limiter = RateLimiter(LOOKUP_LIMIT_PER_MINUTE, 60.0)
+correction_limiter = RateLimiter(CORRECTION_LIMIT_PER_HOUR, 3600.0)
 
 
-def limit_lookup(request: Request) -> None:
-    """조회 API 의존성. 한도를 넘으면 429 `RATE_LIMITED` + `Retry-After`."""
+def _enforce(limiter: RateLimiter, request: Request) -> None:
     client_ip = request.client.host if request.client else "unknown"
-    retry_after = lookup_limiter.hit(client_ip)
+    retry_after = limiter.hit(client_ip)
     if retry_after is not None:
         raise ApiError(
             ErrorCode.RATE_LIMITED,
             "요청이 너무 많아요. 잠시 후 다시 시도해 주세요.",
             headers={"Retry-After": str(retry_after)},
         )
+
+
+def limit_lookup(request: Request) -> None:
+    """조회 API 의존성. 한도를 넘으면 429 `RATE_LIMITED` + `Retry-After`."""
+    _enforce(lookup_limiter, request)
+
+
+def limit_correction(request: Request) -> None:
+    """정정 요청 의존성 (IP당 5회/시간)."""
+    _enforce(correction_limiter, request)

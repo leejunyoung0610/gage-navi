@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["places"])
 
 CACHE_CONTROL = "public, max-age=300"  # docs/30 §1 "캐시"
-_PNU = re.compile(r"\d{19}")
-_FLOOR = re.compile(r"B[1-9]|[1-9]\d?|RF")  # 층 파서가 내는 값 (docs/10 §3)
+PNU_PATTERN = re.compile(r"\d{19}")
+FLOOR_PATTERN = re.compile(r"B[1-9]|[1-9]\d?|RF")  # 층 파서가 내는 값 (docs/10 §3)
 NO_HISTORY_MESSAGE = "이 필지에는 식품 업소 인허가 기록이 없어요."
 NO_FLOOR_MESSAGE = "이 층에는 식품 업소 인허가 기록이 없어요."
 UNAVAILABLE_MESSAGE = "서비스에 일시적인 문제가 있어요. 잠시 후 다시 시도해 주세요."
@@ -151,8 +151,8 @@ class FloorResponse(BaseModel):
     meta: Meta
 
 
-def _check_pnu(pnu: str) -> None:
-    if _PNU.fullmatch(pnu) is None:
+def check_pnu(pnu: str) -> None:
+    if PNU_PATTERN.fullmatch(pnu) is None:
         raise ApiError(
             ErrorCode.VALIDATION_ERROR,
             "필지 번호를 확인해 주세요.",
@@ -263,7 +263,7 @@ async def _base_rate(
     responses=ERROR_RESPONSES,
 )
 async def get_place(pnu: str, response: Response) -> PlaceResponse:
-    _check_pnu(pnu)
+    check_pnu(pnu)
     try:
         async with reader_session() as reader:
             parcel = await reader.parcel(pnu)
@@ -307,8 +307,8 @@ async def get_place(pnu: str, response: Response) -> PlaceResponse:
     responses=ERROR_RESPONSES,
 )
 async def get_floor(pnu: str, floor: str, response: Response) -> FloorResponse:
-    _check_pnu(pnu)
-    if _FLOOR.fullmatch(floor) is None:
+    check_pnu(pnu)
+    if FLOOR_PATTERN.fullmatch(floor) is None:
         raise ApiError(
             ErrorCode.VALIDATION_ERROR,
             "층을 확인해 주세요.",
