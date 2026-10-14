@@ -120,10 +120,12 @@ def test_no_ho() -> None:
 
 
 # 실제 데이터 20건 (T-013). 기대값은 파서 결과를 보지 않고 실제 호실 기준으로 썼다.
-# 작성자는 건별 `labeled_by`. 추출: `jobs.sample_ho_cases` (seed·모집단은 파일에 기록)
-REAL_CASES = json.loads(
+# 작성자는 건별 `labeled_by` — 17건은 채팅 Claude, 사람이 쓴 라벨이 아니다(docs/50 §1).
+# 추출: `jobs.sample_ho_cases` (seed·모집단은 파일에 기록)
+REAL_FILE = json.loads(
     (Path(__file__).parent / "data" / "ho_real_cases.json").read_text(encoding="utf-8")
-)["cases"]
+)
+REAL_CASES = REAL_FILE["cases"]
 
 
 def _parsed(case: dict[str, Any]) -> list[str]:
@@ -134,6 +136,14 @@ def test_real_cases_are_all_labeled() -> None:
     assert len(REAL_CASES) == 20
     assert sum(case["stratum"] == "tricky" for case in REAL_CASES) == 10
     assert all(isinstance(case["expected"], list) and case["labeled_by"] for case in REAL_CASES)
+
+
+def test_label_sources_match_file_summary() -> None:
+    """라벨 출처를 숨기지 않는다: 파일 설명과 건별 `labeled_by`의 건수가 같다."""
+    by_claude = [case for case in REAL_CASES if case["labeled_by"].startswith("채팅 Claude(")]
+    by_user = [case for case in REAL_CASES if case["labeled_by"] == "사용자"]
+    assert (len(by_claude), len(by_user)) == (17, 2)
+    assert REAL_FILE["labeled_by_summary"].startswith("20건 중 17건은 채팅 Claude")
 
 
 def test_real_cases_summary() -> None:

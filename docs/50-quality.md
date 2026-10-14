@@ -13,6 +13,15 @@
 | 프론트 단위 | `apps/web` | Vitest | `lib/format`, `profile-store` 마이그레이션 |
 | E2E | `apps/web/tests/e2e` | Playwright (모바일 뷰포트 390×844) | §7 게이트 시나리오 |
 
+**실제 데이터 정답 라벨의 출처** (파서 결과를 보지 않고 쓴 기대값):
+
+| 파일 | 건수 | 누가 썼나 |
+|---|---|---|
+| `tests/unit/data/floor_real_cases.json` (층, T-012) | 40 | 사용자 40건 |
+| `tests/unit/data/ho_real_cases.json` (호, T-013) | 20 | **채팅 Claude 17건**, 사용자 2건, Claude 제안을 사용자가 확정 1건 |
+
+호 라벨 20건 중 17건은 사람이 아니라 AI가 쓴 것이다. 건별 작성자는 각 건의 `labeled_by`에 있고, 파일 설명(`labeled_by_summary`)과 건수가 맞는지 테스트한다(`test_label_sources_match_file_summary`). 호 파서의 "20건 중 정답 일치 19건"은 이 라벨 기준이다
+
 ## 2. 데이터 검증 (수집할 때마다, 결과는 `data_snapshot.validation`)
 
 | ID | 검사 | 실패 조건 | 조치 |
@@ -161,7 +170,7 @@ docs/21 §8 (F-S1~S10), docs/22 §7 (C-S1~S12). 가상 규칙 픽스처는 `test
   | 지번 변경 (추정) | 위가 아니고, 후보 중 도로명주소(`roadAddrPart1`)가 검색어와 같은 것이 있음 — 같은 건물을 찾았으나 그 건물의 현재 지번·관련지번에 기록의 지번이 없다. 지번이 바뀌었는지 기록의 지번이 틀렸는지는 이 측정으로 가를 수 없다 |
   | 기타 | 나머지 (검색어와 같은 도로명주소의 후보가 없음 등) |
 
-  - ~~다시 조회하는 것은 분류에만 쓴다. 일치 여부는 첫 조회의 후보 PNU로만 정하고, 관련지번에 있다고 일치로 바꾸지 않는다.~~ → **정정(2026-10-13, 결과를 보기 전)**: 이 문장은 `8434817`에서 넣은 것인데 사전 등록 정의("건물 하나가 여러 필지면 그중 하나가 같으면 일치")를 좁힌다. 판정은 사전 등록 정의대로 한다(위 "보고하는 값 두 가지"). 다시 조회도 1초에 1건·같은 중단 규칙을 따른다. 다시 조회가 통신 오류나 검색어 오류면 그 건은 "기타"로 둔다
+  - ~~다시 조회하는 것은 분류에만 쓴다. 일치 여부는 첫 조회의 후보 PNU로만 정하고, 관련지번에 있다고 일치로 바꾸지 않는다.~~ → **정정(2026-10-13, 결과를 보기 전)**: 이 문장은 `bf52fd1`에서 넣은 것인데 사전 등록 정의("건물 하나가 여러 필지면 그중 하나가 같으면 일치")를 좁힌다. 판정은 사전 등록 정의대로 한다(위 "보고하는 값 두 가지"). 다시 조회도 1초에 1건·같은 중단 규칙을 따른다. 다시 조회가 통신 오류나 검색어 오류면 그 건은 "기타"로 둔다
 - **나눠 보는 단위** (측정 전에 정함): 구는 기록의 `sigungu_code`, 개업연도는 `opened_on`의 해를 `1999년 이전 / 2000~2009 / 2010~2015 / 2016~2020 / 2021년 이후 / 개업일 없음`으로 묶는다. 나눈 값은 참고용이고 판정은 전체 값으로 한다
 - **보고**: 판정은 점추정으로 한다. Wilson 95% 신뢰구간, 종단 값, 실패 유형별 건수를 함께 보고한다
 - **판정**
@@ -233,9 +242,9 @@ docs/21 §8 (F-S1~S10), docs/22 §7 (C-S1~S12). 가상 규칙 픽스처는 `test
 
 | 작업 | 트리거 | 내용 |
 |---|---|---|
-| `api-check` | PR | `make check-api` — ruff(check·format --check), mypy, import-linter(모듈 경계·LLM import 제한), pytest(unit·property·scenario·golden) |
+| `api-check` | PR · main push | `make check-api` — ruff(check·format --check), mypy, import-linter(모듈 경계·LLM import 제한), pytest(unit·property·scenario·golden) |
 | `api-integration` | PR | docker postgres로 마이그레이션 + 통합 테스트 |
-| `web-check` | PR | `make check-web` — eslint, tsc, prettier --check, vitest (T-004). `gen:api` 차이 검사는 T-031, `check_copy`는 T-037에서 추가 |
+| `web-check` | PR · main push | `make check-web` — eslint, tsc, prettier --check, vitest (T-004). `gen:api` 차이 검사는 T-031, `check_copy`는 T-037에서 추가 |
 | `e2e` | PR(라벨) · main | Playwright (API 목 서버) |
 | `e2e-full` | main · 게이트 판정 시 | docker compose(db+api+web) 실제 스택 Playwright — 정정 요청·재생성 흐름 |
 | `mutation` | 주 1회 | mutmut `rules/engine` |

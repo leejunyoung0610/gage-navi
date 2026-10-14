@@ -10,6 +10,7 @@
   "tricky_candidates": 34116,
   "labeled_on": "2026-10-13",
   "labeling_note": "기대값은 파서가 읽을 수 있는지와 상관없이 실제 호실 기준",
+  "labeled_by_summary": "20건 중 17건은 채팅 Claude가 정답을 썼다(사람이 쓴 라벨이 아니다). 2건은 사용자, 1건은 Claude가 제안하고 사용자가 확정했다. 건별 작성자는 각 건의 labeled_by",
   "cases": [
     {
       "no": 1,
