@@ -60,3 +60,19 @@ async def existing_parcels(pnus: list[str]) -> set[str]:
                 text("SELECT pnu FROM parcel WHERE pnu = ANY(:pnus)"), {"pnus": pnus}
             )
             return {str(row[0]) for row in rows}
+
+
+async def legal_dong_rows(names: list[str]) -> list[tuple[str, str, bool]]:
+    """`full_name`이 `names` 중 하나인 `legal_dong` 행 `(code, full_name, abolished)`."""
+    if not names:
+        return []
+    async with asyncio.timeout(PING_TIMEOUT_SECONDS):
+        async with get_engine().connect() as conn:
+            rows = await conn.execute(
+                text(
+                    "SELECT code, full_name, abolished FROM legal_dong "
+                    "WHERE full_name = ANY(:names)"
+                ),
+                {"names": names},
+            )
+            return [(str(code), str(name), bool(abolished)) for code, name, abolished in rows]

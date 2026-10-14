@@ -31,6 +31,7 @@ _SQL_WORD = re.compile(r"(?<![A-Za-z])(?:" + "|".join(_SQL_WORDS) + r")(?![A-Za-
 _BLOCKED_CHARS = re.compile(r"[%=<>\[\]'\"+;]")
 _WHITESPACE = re.compile(r"\s+")
 _NUMBER_MAX = 9999  # 본번·부번은 PNU에서 4자리씩이다
+_REL_LOT = re.compile(r"^(?P<san>산)?(?P<main>\d+)(?:-(?P<sub>\d+))?$")
 
 
 class JusoError(Exception):
@@ -54,11 +55,22 @@ class JusoUnavailableError(JusoError):
 
 
 @dataclass(frozen=True)
+class RelatedLot:
+    """관련지번 한 개. 법정동은 이름만 있다(코드는 `legal_dong`에서 찾는다)."""
+
+    dong_name: str  # '서울특별시 광진구 화양동' (`legal_dong.full_name`과 같은 꼴)
+    is_san: bool
+    main: int
+    sub: int
+
+
+@dataclass(frozen=True)
 class JusoItem:
     road_addr: str
     jibun_addr: str
     building_name: str | None
     pnu: str | None  # 응답 필드로 PNU를 만들 수 없으면 None (기본값으로 채우지 않는다)
+    related_lots: tuple[RelatedLot, ...] = ()  # 같은 건물의 관련지번 (`relJibun`, docs/30 §2)
 
 
 @dataclass(frozen=True)
@@ -92,6 +104,38 @@ def pnu_from_juso(adm_cd: Any, mt_yn: Any, lnbr_mnnm: Any, lnbr_slno: Any) -> st
     return f"{code}{'2' if mt_yn == '1' else '1'}{int(main):04d}{int(sub):04d}"
 
 
+def parse_related_lots(rel_jibun: Any, sido: Any) -> tuple[RelatedLot, ...]:
+    """관련지번 `서울특별시 광진구 자양동 225-79,화양동 4-1,4-3` → 지번 목록 (docs/30 §2).
+
+    법정동 이름은 바뀔 때만 적혀 있어 앞 이름을 이어 쓴다. 이름 낱말이 시도(`sido`)로 시작하면
+    통째로 바꾸고, 아니면 앞 이름의 끝 낱말을 그만큼 바꾼다(`화양동` → `… 광진구 화양동`).
+    읽을 수 없는 항목은 건너뛴다. 형식이 달라도 예외를 내지 않는다(추가 항목은 바뀔 수 있다).
+    """
+    if not isinstance(rel_jibun, str):
+        return ()
+    lots: list[RelatedLot] = []
+    prefix: list[str] | None = None
+    for entry in rel_jibun.split(","):
+        words = entry.split()
+        if not words:
+            continue
+        names, lot = words[:-1], _REL_LOT.match(words[-1])
+        if names:
+            if prefix is None or names[0] == sido:
+                prefix = names
+            elif len(names) < len(prefix):
+                prefix = prefix[: len(prefix) - len(names)] + names
+            else:
+                prefix = None
+        if lot is None or prefix is None:
+            continue
+        main, sub = int(lot["main"]), int(lot["sub"] or 0)
+        if main > _NUMBER_MAX or sub > _NUMBER_MAX:
+            continue
+        lots.append(RelatedLot(" ".join(prefix), lot["san"] is not None, main, sub))
+    return tuple(lots)
+
+
 def parse_response(payload: Any, page: int) -> JusoPage:
     """JSON 응답(`results.common`, `results.juso`) → `JusoPage`."""
     try:
@@ -115,6 +159,7 @@ def parse_response(payload: Any, page: int) -> JusoPage:
                 pnu=pnu_from_juso(
                     row.get("admCd"), row.get("mtYn"), row.get("lnbrMnnm"), row.get("lnbrSlno")
                 ),
+                related_lots=parse_related_lots(row.get("relJibun"), row.get("siNm")),
             )
             for row in rows
         )
@@ -134,8 +179,8 @@ class JusoClient:
     async def fetch(self, keyword: str, page: int, *, add_info: bool = False) -> Any:
         """응답 JSON을 그대로 돌려준다 (녹화 잡과 `search`가 함께 쓴다).
 
-        `add_info`: 관련지번(`relJibun`) 등 추가 항목을 함께 받는다(`addInfoYn=Y`).
-        주소 검색 프록시는 쓰지 않고, 검색 일치율 측정의 불일치 사유 분류만 쓴다(docs/50 §7).
+        `add_info`: 관련지번(`relJibun`) 등 추가 항목을 같은 호출로 함께 받는다(`addInfoYn=Y`).
+        주소 검색 프록시(`search`, `related_pnus`)와 검색 일치율 측정의 불일치 사유 분류가 쓴다.
         """
         form = {
             "confmKey": self._confm_key,
@@ -160,4 +205,4 @@ class JusoClient:
             raise JusoUnavailableError("invalid_json") from None
 
     async def search(self, keyword: str, page: int) -> JusoPage:
-        return parse_response(await self.fetch(keyword, page), page)
+        return parse_response(await self.fetch(keyword, page, add_info=True), page)

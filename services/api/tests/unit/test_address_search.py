@@ -8,7 +8,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.address import router as address_router
-from app.address.juso import JusoItem, JusoKeywordError, JusoPage, JusoUnavailableError
+from app.address.juso import (
+    JusoItem,
+    JusoKeywordError,
+    JusoPage,
+    JusoUnavailableError,
+    RelatedLot,
+)
 from app.core import db
 from app.core.ratelimit import LOOKUP_LIMIT_PER_MINUTE, lookup_limiter
 from app.main import app
@@ -28,6 +34,13 @@ PAGE = JusoPage(
     page=1,
     total=3,
 )
+
+# 가상 예시: 법정동 이름 → 코드
+DONG_ROWS = [
+    ("1121510700", "가상시 가상구 가상동", False),
+    ("1121510800", "가상시 가상구 다른동", False),
+    ("1121510900", "가상시 가상구 옛동", True),
+]
 
 
 class FakeJuso:
@@ -49,7 +62,11 @@ def juso(monkeypatch: pytest.MonkeyPatch) -> Iterator[FakeJuso]:
     async def existing(pnus: list[str]) -> set[str]:
         return {WITH_HISTORY} & set(pnus)
 
+    async def dong_rows(names: list[str]) -> list[tuple[str, str, bool]]:
+        return [row for row in DONG_ROWS if row[1] in names]
+
     monkeypatch.setattr(db, "existing_parcels", existing)
+    monkeypatch.setattr(db, "legal_dong_rows", dong_rows)
     app.dependency_overrides[address_router.get_juso_client] = lambda: fake
     address_router.search_cache.clear()
     lookup_limiter.reset()
@@ -71,6 +88,7 @@ def test_search_returns_items_with_history_flag(juso: FakeJuso) -> None:
                 "building_name": "가상빌딩",
                 "pnu": WITH_HISTORY,
                 "has_history": True,
+                "related_pnus": [],
             },
             {
                 "road_addr": "가상시 가상구 가상로 14",
@@ -78,6 +96,7 @@ def test_search_returns_items_with_history_flag(juso: FakeJuso) -> None:
                 "building_name": None,
                 "pnu": WITHOUT_HISTORY,
                 "has_history": False,
+                "related_pnus": [],
             },
             {
                 "road_addr": "가상시 가상구 가상로 16",
@@ -85,6 +104,7 @@ def test_search_returns_items_with_history_flag(juso: FakeJuso) -> None:
                 "building_name": None,
                 "pnu": None,
                 "has_history": None,  # 필지를 모르면 이력 여부도 모른다
+                "related_pnus": [],
             },
         ],
         "page": 1,
@@ -212,3 +232,47 @@ def test_settings_repr_hides_key(monkeypatch: pytest.MonkeyPatch) -> None:
     settings = get_settings()
     assert settings.juso_confm_key == "TEST-KEY-가상"
     assert "TEST-KEY" not in repr(settings)
+
+
+def test_related_lots_become_pnus(juso: FakeJuso) -> None:
+    lots = (
+        RelatedLot("가상시 가상구 가상동", False, 47, 1),  # 대표 지번과 같다 → 뺀다
+        RelatedLot("가상시 가상구 가상동", False, 4, 3),
+        RelatedLot("가상시 가상구 모르는동", False, 9, 0),  # 법정동을 찾지 못함 → 뺀다
+        RelatedLot("가상시 가상구 다른동", True, 12, 0),
+        RelatedLot("가상시 가상구 가상동", False, 4, 3),  # 중복 → 뺀다
+        RelatedLot("가상시 가상구 옛동", False, 1, 0),  # 폐지 코드 하나뿐 → 그 코드
+    )
+    juso.result = JusoPage(
+        items=(
+            JusoItem("가상로 12", "가상동 47-1", None, WITH_HISTORY, lots),
+            JusoItem("가상로 16", "가상동", None, None, lots[1:2]),
+        ),
+        page=1,
+        total=2,
+    )
+    items = client.get(URL, params={"q": QUERY}).json()["data"]["items"]
+    assert items[0]["related_pnus"] == [
+        "1121510700100040003",
+        "1121510800200120000",
+        "1121510900100010000",
+    ]
+    assert items[1]["pnu"] is None and items[1]["related_pnus"] == ["1121510700100040003"]
+
+
+def test_legal_dong_lookup_failure_is_503(juso: FakeJuso, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def broken(names: list[str]) -> list[tuple[str, str, bool]]:
+        raise ConnectionRefusedError("refused")
+
+    monkeypatch.setattr(db, "legal_dong_rows", broken)
+    juso.result = JusoPage(
+        items=(JusoItem("가상로 12", "가상동 47-1", None, WITH_HISTORY, PAGE_LOT),),
+        page=1,
+        total=1,
+    )
+    response = client.get(URL, params={"q": QUERY})
+    assert response.status_code == 503
+    assert "refused" not in response.text
+
+
+PAGE_LOT = (RelatedLot("가상시 가상구 가상동", False, 4, 3),)

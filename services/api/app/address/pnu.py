@@ -110,6 +110,14 @@ def to_pnu(parts: JibunParts, index: LegalDongIndex) -> str | None:
     return None if found.code is None else _format_pnu(found.code, parts)
 
 
+def lot_pnu(dong_name: str, is_san: bool, main: int, sub: int, index: LegalDongIndex) -> str | None:
+    """법정동 이름과 지번 → PNU. 코드를 찾지 못하면 `None` (주소 검색 `related_pnus`)."""
+    found = index.lookup(dong_name)
+    if found.code is None:
+        return None
+    return f"{found.code}{'2' if is_san else '1'}{main:04d}{sub:04d}"
+
+
 def build_pnu(addr: str | None, index: LegalDongIndex) -> PnuResult:
     """주소 하나의 PNU와 실패 사유. 실패율 집계(docs/10 §2.1)에 쓴다."""
     parts = parse_jibun(addr)
