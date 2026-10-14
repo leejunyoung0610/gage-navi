@@ -30,6 +30,7 @@ from app.address.search_match import (
     TRANSPORT_ERROR,
     TRANSPORT_RETRIES,
     AccessProblemError,
+    CommitTime,
     Outcome,
     Pacer,
     RecordKey,
@@ -45,6 +46,7 @@ from app.address.search_match import (
     year_band,
 )
 from app.location.stats.base_rate import wilson_ci
+from jobs import render_search_match
 
 POPULATION = [
     RecordKey(license_type, f"가상-{n:05d}")
@@ -364,6 +366,53 @@ def test_render_report() -> None:
     assert "| 가상구 | 5 | " in report and "| 나상구 | 5 | " in report
     assert "| 2016~2020 | 5 | " in report and "| 개업일 없음 | 5 | " in report
     assert "가상로" not in report and "가상-00001" not in report  # 주소·관리번호는 싣지 않는다
+
+
+def test_render_report_commit_times_table() -> None:
+    ctx = ReportContext(
+        measured_on="2026-10-13",
+        criteria_commit="가상",
+        seed=20261013,
+        remeasure=False,
+        population=10,
+        snapshots="bakery #3",
+        records_total=10,
+        records_with_pnu=10,
+        calls=10,
+        stopped_runs="없음",
+        gu_names={},
+        commits=(
+            CommitTime(
+                "기준", "가상0001", "2026-10-13 16:14:15 +0900", "2026-10-13 17:09:00 +0900"
+            ),
+            CommitTime(
+                "결과", "가상0002", "2026-10-14 16:38:03 +0900", "2026-10-14 17:00:09 +0900"
+            ),
+        ),
+    )
+    report = render_report([Outcome(RECORD, MATCH)], ctx)
+    assert "## 사전 등록 커밋과 결과 커밋의 시각" in report
+    assert "| 기준 | `가상0001` | 2026-10-13 16:14:15 +0900 | 2026-10-13 17:09:00 +0900 |" in report
+    assert report.index("| 기준 |") < report.index("| 결과 |")
+    no_commits = render_report([Outcome(RECORD, MATCH)], dataclasses.replace(ctx, commits=()))
+    assert "사전 등록 커밋" not in no_commits
+
+
+def test_commit_times_refuses_hash_missing_from_main(monkeypatch: pytest.MonkeyPatch) -> None:
+    """머지 전 브랜치 해시(main에 없음)는 리포트에 싣지 않는다 (ADR-029)."""
+    on_main = {"가상0001"}
+
+    def fake_git(*args: str) -> Any:
+        if args[0] == "merge-base":
+            return dataclasses.make_dataclass("P", ["returncode"])(0 if args[2] in on_main else 1)
+        stdout = f"{args[-1]}|2026-10-13 16:14:15 +0900|2026-10-13 17:09:00 +0900\n"
+        return dataclasses.make_dataclass("P", ["stdout"])(stdout)
+
+    monkeypatch.setattr(render_search_match, "_git", fake_git)
+    assert render_search_match.commit_times(["기준=가상0001"]) == (
+        CommitTime("기준", "가상0001", "2026-10-13 16:14:15 +0900", "2026-10-13 17:09:00 +0900"),
+    )
+    assert render_search_match.commit_times(["기준=가상0001", "측정 잡=가상0009"]) is None
 
 
 def test_judged_match_includes_related_lot_match() -> None:

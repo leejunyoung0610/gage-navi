@@ -37,3 +37,6 @@ apps/web/playwright-report/
 .DS_Store
 .idea/
 *.swp
+
+# 사용자 개인 노트 — 공개하지 않는다 (docs/70 §1.2)
+docs/notes/

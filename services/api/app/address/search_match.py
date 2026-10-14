@@ -346,6 +346,16 @@ def _group_table(title: str, groups: dict[str, list[Outcome]], order: Sequence[s
 
 
 @dataclass(frozen=True)
+class CommitTime:
+    """리포트에 싣는 커밋 하나 — `main`에 있는 해시와 git이 기록한 두 시각."""
+
+    label: str
+    sha: str
+    authored: str  # author date: 작성자가 커밋을 만든 시각. rebase 머지에도 그대로 남는다
+    committed: str  # committer date: `main`에 들어간 시각(rebase 머지 때 새로 찍힌다)
+
+
+@dataclass(frozen=True)
 class ReportContext:
     measured_on: str
     criteria_commit: str
@@ -358,6 +368,28 @@ class ReportContext:
     calls: int
     stopped_runs: str
     gu_names: dict[str, str]
+    commits: tuple[CommitTime, ...] = ()
+
+
+def _commit_table(commits: Sequence[CommitTime]) -> list[str]:
+    if not commits:
+        return []
+    lines = [
+        "",
+        "## 사전 등록 커밋과 결과 커밋의 시각",
+        "",
+        "기준·절차·코드를 커밋한 시각과 결과를 커밋한 시각을 나란히 둔다. 해시는 `main`의 것이다"
+        "(rebase 머지로 브랜치 때의 해시와 다르다, ADR-029). 작성 시각(author date)은 커밋을 만든 "
+        "컴퓨터의 시계로 기록되어 제3자가 보증하는 값은 아니다. "
+        "`main`에 들어간 시각(committer date)은 머지 때 다시 찍혀 사전 등록의 근거로 쓰지 않는다.",
+        "",
+        "| 구분 | 커밋 | 작성 시각 (author date) | `main`에 들어간 시각 |",
+        "|---|---|---|---|",
+    ]
+    lines += [
+        f"| {row.label} | `{row.sha}` | {row.authored} | {row.committed} |" for row in commits
+    ]
+    return lines
 
 
 def render_report(outcomes: Sequence[Outcome], ctx: ReportContext) -> str:
@@ -431,4 +463,5 @@ def render_report(outcomes: Sequence[Outcome], ctx: ReportContext) -> str:
     lines += _group_table("구", by_gu, sorted(by_gu))
     lines += ["", "## 개업연도별 (참고 — 판정은 전체 값)", ""]
     lines += _group_table("개업연도", by_band, YEAR_BANDS)
+    lines += _commit_table(ctx.commits)
     return "\n".join(lines) + "\n"

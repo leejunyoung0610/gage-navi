@@ -1,5 +1,7 @@
 # 가게내비 (가칭)
 
+[![ci](https://github.com/leejunyoung0610/gage-navi/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/leejunyoung0610/gage-navi/actions/workflows/ci.yml?query=branch%3Amain)
+
 소상공인이 **자리 계약 · 정책자금 · 폐업**을 결정할 때, 공공데이터와 검증 가능한 규칙으로 돕는 웹 서비스입니다.
 
 **현재 상태: 개발 중, 서비스는 공개하지 않았습니다.** 지금은 첫 모듈인 **자리 이력**의 데이터 파이프라인과 API를 만들고 있습니다. 정책자금·폐업 지원 모듈과 웹 화면은 설계 단계입니다. 서비스 공개는 데이터·법적 기준을 정해 둔 공개 게이트([docs/50 §7](docs/50-quality.md))를 통과한 뒤에 합니다. 저장소를 먼저 공개한 이유는 [ADR-029](docs/02-adr.md)에 적었습니다.
@@ -16,8 +18,8 @@
 |---|---|---|
 | 처리한 인허가 기록 | **704,116건** (서울 식품 3종: 일반음식점·휴게음식점·제과점영업) | [reports/pnu_failures.md](reports/pnu_failures.md) |
 | 지번주소 → 필지번호(PNU) 변환 실패율 | **0.1062%** (748 / 704,116, 기준 0.5% 미만) | [reports/pnu_failures.md](reports/pnu_failures.md) |
-| 주소 검색 일치율 | **95.85%** (1,917 / 2,000, Wilson 95% 신뢰구간 94.88% ~ 96.64%). 결과를 보기 전에 정한 기준(95% 이상)으로 통과 | [reports/search_match.md](reports/search_match.md) |
-| 테스트 | API 795개(DB 통합 테스트 87개 포함), 웹 2개 — 2026-10-14 `main` 기준, `pytest --collect-only`로 셈 | [docs/50](docs/50-quality.md) |
+| 주소 검색 일치율 | **판정용 95.85%** (1,917 / 2,000, Wilson 95% 신뢰구간 94.88% ~ 96.64%). 결과를 보기 전에 정한 기준(95% 이상)으로 통과. 참고용(대표 지번만) **94.25%** (1,885 / 2,000) — 차이 32건(1.60%)은 건물 하나가 여러 필지라 관련지번으로만 일치한 건이다. 판정용 정의("여러 필지면 그중 하나가 같으면 일치")는 측정 전에 정했다: [사전 등록 커밋과 결과 커밋의 시각](reports/search_match.md#사전-등록-커밋과-결과-커밋의-시각), [ADR-028 정정(2026-10-13, 결과를 보기 전)](docs/02-adr.md#adr-028-검색-일치율-측정의-호출-절차-측정-전-결정) | [reports/search_match.md](reports/search_match.md) |
+| 테스트 | API 850개(DB 통합 테스트 109개 포함), 웹 2개 — 2026-10-14, PR #29 머지 시점의 `main` 기준, `pytest --collect-only`로 셈 | [docs/50](docs/50-quality.md) |
 
 ## 주요 판단 5가지
 
@@ -87,6 +89,13 @@ flowchart LR
 ## 개발 방식
 
 AI 코딩 에이전트(Claude Code)와 **티켓 단위**로 작업합니다. 사람은 범위 결정, 판단, 검증, 머지를 맡습니다.
+
+| 누가 | 한 일 |
+|---|---|
+| 사람 | 층 파서 정답 라벨 **40건**(40건 모두), 가설, 판정 기준 결정(사전 등록 기준·게이트 구간), 티켓별 머지 판단 |
+| AI (Claude) | 구현 대부분(코드·테스트·문서 초안), 호수 파서 정답 라벨 **17건**(20건 중) |
+
+정답 라벨의 출처는 [docs/50 §1](docs/50-quality.md)에 건수로 적었습니다. 호수 라벨 20건 중 17건은 사람이 쓴 것이 아닙니다.
 
 - 작업은 [docs/80-tasks.md](docs/80-tasks.md)의 티켓 하나씩 진행합니다. 티켓마다 수용 기준이 있고, 가능한 것은 테스트로 옮깁니다. 한 세션에서 한 티켓만 다룹니다.
 - 에이전트 규칙은 [AGENTS.md](AGENTS.md)와 [CLAUDE.md](CLAUDE.md)에 있습니다.

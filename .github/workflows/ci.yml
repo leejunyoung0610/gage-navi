@@ -2,12 +2,15 @@
 # e2e·e2e-full·mutation·security 작업은 해당 티켓에서 추가한다.
 name: ci
 
+# main push에는 api-check·web-check만 돈다(README 배지가 main 상태를 보여 준다). 통합 테스트는 PR에서만.
 on:
   pull_request:
+  push:
+    branches: [main]
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -29,6 +32,7 @@ jobs:
         run: make check-api
 
   api-integration:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
