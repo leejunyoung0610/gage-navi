@@ -1,13 +1,16 @@
 """검색 일치율 측정 (T-021b, docs/50 §7 사전 등록 기준, ADR-028).
 
-    cd services/api && caffeinate -i uv run --env-file ../../.env \\
-        python -m jobs.measure_search_match \\
-        --measured-on 2026-10-13 --criteria-commit "2026-10-13 (abc1234)"
+    cd services/api && caffeinate -ims uv run --env-file ../../.env \\
+        python -m jobs.measure_search_match
 
-- 도로명주소 API를 실제로 부른다(1초에 1건, 순차). 표본 2,000건이면 30분이 넘는다
-- 접근 문제 오류코드가 나오면 멈춘다(종료 코드 3). 그때까지의 일치율은 계산·출력하지 않는다
-- 진행 상황은 "몇 건째, 호출 몇 번"만 출력한다. 검색어·승인키·건별 결과는 출력하지 않는다
-- 건별 결과는 `data/derived/search_match/`(gitignore)에만 쓰고, 리포트에는 집계만 싣는다
+- 도로명주소 API를 실제로 부른다(1초에 1건, 순차, 요청마다 10초 제한). 2,000건이면 30분이 넘는다
+- 접근 문제(오류코드, HTTP 429·5xx·연결 오류 연속 3번, 5분 동안 진행 없음)면 멈춘다(종료 코드 3).
+  그때까지의 일치율은 계산·출력하지 않는다
+- 진행 상황은 "시각, 몇 건째, 호출 몇 번"만 출력한다. 검색어·승인키·건별 결과는 출력하지 않는다
+- 건별 결과는 한 건이 끝날 때마다 `data/derived/search_match/seed_<seed>.jsonl`
+  (gitignore)에 덧붙인다. 리포트는 `jobs.render_search_match`가 이 파일에서 집계만 싣는다
+- 덮개를 닫으면(배터리 전원) `caffeinate`로도 잠드는 것을 막지 못한다.
+  전원을 연결하고 덮개를 연 채로 돈다
 """
 
 import argparse
@@ -16,6 +19,7 @@ import json
 import os
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 import httpx2
@@ -25,22 +29,21 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from app.address.juso import JusoClient
 from app.address.search_match import (
     REMEASURE_SEED,
+    REQUEST_TIMEOUT_SECONDS,
     SAMPLE_SIZE,
     SEED,
     AccessProblemError,
     Outcome,
     Pacer,
     RecordKey,
-    ReportContext,
     SampleRecord,
     draw_sample,
     measure,
-    render_report,
 )
 from app.core.db import get_engine
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_OUT = REPO_ROOT / "reports" / "search_match.md"
+DEFAULT_OUT = REPO_ROOT / "reports" / "search_match.md"  # jobs.render_search_match가 쓴다
 DETAIL_DIR = REPO_ROOT / "data" / "derived" / "search_match"
 PROGRESS_EVERY = 100
 
@@ -100,24 +103,27 @@ async def load(
     return [by_key[key] for key in keys], facts
 
 
+def _now() -> str:
+    return datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
+
+
 def _progress(done: int, calls: int) -> None:
     if done % PROGRESS_EVERY == 0:
-        print(f"진행: {done}건, 호출 {calls}번", flush=True)
+        print(f"{_now()} 진행: {done}건, 호출 {calls}번", flush=True)
 
 
-def write_detail(outcomes: list[Outcome], seed: int) -> Path:
-    DETAIL_DIR.mkdir(parents=True, exist_ok=True)
-    path = DETAIL_DIR / f"seed_{seed}.json"
-    rows = [
-        {
-            "license_type": row.record.key.license_type,
-            "mgmt_no": row.record.key.mgmt_no,
-            "outcome": row.outcome,
-        }
-        for row in outcomes
-    ]
-    path.write_text(json.dumps(rows, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    return path
+def detail_path(seed: int) -> Path:
+    return DETAIL_DIR / f"seed_{seed}.jsonl"
+
+
+def detail_line(outcome: Outcome) -> str:
+    row = {
+        "license_type": outcome.record.key.license_type,
+        "mgmt_no": outcome.record.key.mgmt_no,
+        "outcome": outcome.outcome,
+        "transport_reasons": list(outcome.transport_reasons),
+    }
+    return json.dumps(row, ensure_ascii=False) + "\n"
 
 
 async def run(args: argparse.Namespace, secret: str) -> int:
@@ -127,50 +133,38 @@ async def run(args: argparse.Namespace, secret: str) -> int:
         sample, facts = await load(engine, seed, args.size)
     finally:
         await engine.dispose()
-    print(f"표본 {len(sample)}건 (seed {seed}, 모집단 {facts['population']}건)", flush=True)
+    path = detail_path(seed)
+    if path.exists():
+        print(f"{path.name}이 이미 있습니다. 앞 실행의 파일을 옮긴 뒤 다시 실행하세요.")
+        return 2
+    path.parent.mkdir(parents=True, exist_ok=True)
+    print(f"{_now()} 시작: 표본 {len(sample)}건 (seed {seed}, 모집단 {facts['population']}건)")
     pacer = Pacer(time.monotonic, asyncio.sleep)
-    async with httpx2.AsyncClient() as http:
-        try:
-            outcomes = await measure(sample, JusoClient(secret, http).fetch, pacer, _progress)
-        except AccessProblemError as exc:
-            print(f"중단: 접근 문제 ({exc.reason}), {exc.call_no}번째 호출", flush=True)
-            return 3
-    detail = write_detail(outcomes, seed)
-    gu_names = facts["gu_names"]
-    assert isinstance(gu_names, dict)
-    report = render_report(
-        outcomes,
-        ReportContext(
-            measured_on=args.measured_on,
-            criteria_commit=args.criteria_commit,
-            seed=seed,
-            remeasure=args.remeasure,
-            population=int(str(facts["population"])),
-            snapshots=str(facts["snapshots"]),
-            records_total=int(str(facts["records_total"])),
-            records_with_pnu=int(str(facts["records_with_pnu"])),
-            calls=pacer.calls,
-            stopped_runs=args.stopped_runs,
-            gu_names=gu_names,
-        ),
-    )
-    args.out.write_text(report, encoding="utf-8")
+    with path.open("w", encoding="utf-8") as detail:
+
+        def write(outcome: Outcome) -> None:
+            detail.write(detail_line(outcome))
+            detail.flush()
+
+        async with httpx2.AsyncClient() as http:
+            client = JusoClient(secret, http, timeout=REQUEST_TIMEOUT_SECONDS)
+            try:
+                outcomes = await measure(sample, client.fetch, pacer, _progress, time.time, write)
+            except AccessProblemError as exc:
+                print(
+                    f"{_now()} 중단: 접근 문제 ({exc.reason}), {exc.call_no}번째 호출", flush=True
+                )
+                return 3
     print(
-        f"완료: {len(outcomes)}건, 호출 {pacer.calls}번. 리포트 {args.out.name}, 건별 {detail.name}"
+        f"{_now()} 완료: {len(outcomes)}건, 호출 {pacer.calls}번. 건별 결과 {path.name}", flush=True
     )
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("--measured-on", required=True, help="측정일 YYYY-MM-DD")
-    parser.add_argument("--criteria-commit", required=True, help="기준을 커밋한 날짜와 커밋 해시")
     parser.add_argument("--remeasure", action="store_true", help="재측정(seed 20261014)")
-    parser.add_argument(
-        "--stopped-runs", default="없음", help="접근 문제로 멈춘 실행의 횟수·오류코드"
-    )
     parser.add_argument("--size", type=int, default=SAMPLE_SIZE)
-    parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     args = parser.parse_args(argv)
     secret = os.environ.get("JUSO_CONFM_KEY", "")
     if not secret:

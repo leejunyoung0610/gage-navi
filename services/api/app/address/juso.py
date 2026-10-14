@@ -14,6 +14,7 @@ import httpx2
 JUSO_SEARCH_URL = "https://business.juso.go.kr/addrlink/addrLinkApi.do"
 COUNT_PER_PAGE = 10  # 검색 화면 첫 페이지 후보 수 (docs/40 §4.2)
 TIMEOUT_SECONDS = 5.0
+CONNECTION_REASON = "connection_"  # `JusoUnavailableError.reason` 접두어: 연결 실패·시간 초과
 
 # 검색어 문제로 돌아오는 오류코드 (공식 가이드 「검색API 활용 가이드」 2.2 에러코드)
 KEYWORD_ERROR_CODES = frozenset(
@@ -123,9 +124,12 @@ def parse_response(payload: Any, page: int) -> JusoPage:
 
 
 class JusoClient:
-    def __init__(self, confm_key: str, http: httpx2.AsyncClient) -> None:
+    def __init__(
+        self, confm_key: str, http: httpx2.AsyncClient, timeout: float = TIMEOUT_SECONDS
+    ) -> None:
         self._confm_key = confm_key
         self._http = http
+        self._timeout = timeout
 
     async def fetch(self, keyword: str, page: int, *, add_info: bool = False) -> Any:
         """응답 JSON을 그대로 돌려준다 (녹화 잡과 `search`가 함께 쓴다).
@@ -143,7 +147,9 @@ class JusoClient:
         if add_info:
             form["addInfoYn"] = "Y"
         try:
-            response = await self._http.post(JUSO_SEARCH_URL, data=form, timeout=TIMEOUT_SECONDS)
+            response = await self._http.post(JUSO_SEARCH_URL, data=form, timeout=self._timeout)
+        except httpx2.TransportError as exc:  # 연결 실패·시간 초과 등
+            raise JusoUnavailableError(f"{CONNECTION_REASON}{type(exc).__name__}") from None
         except httpx2.HTTPError as exc:
             raise JusoUnavailableError(type(exc).__name__) from None
         if response.status_code != 200:

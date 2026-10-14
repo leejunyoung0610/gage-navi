@@ -11,6 +11,7 @@ import pytest
 from app.address.juso import KEYWORD_ERROR_CODES, JusoUnavailableError
 from app.address.search_match import (
     CALL_INTERVAL_SECONDS,
+    CONSECUTIVE_FAILURE_LIMIT,
     FAILURE_OUTCOMES,
     HOLD_RATE,
     JIBUN_CHANGED,
@@ -22,8 +23,10 @@ from app.address.search_match import (
     OTHER,
     PASS_RATE,
     REMEASURE_SEED,
+    REQUEST_TIMEOUT_SECONDS,
     SAMPLE_SIZE,
     SEED,
+    STALL_SECONDS,
     TRANSPORT_ERROR,
     TRANSPORT_RETRIES,
     AccessProblemError,
@@ -367,3 +370,87 @@ def test_judged_match_includes_related_lot_match() -> None:
     # 사전 등록 정의: 건물 하나가 여러 필지면 그중 하나가 같으면 일치 (docs/50 §7)
     assert JUDGED_MATCH == {MATCH, MULTI_PARCEL}
     assert MULTI_PARCEL not in FAILURE_OUTCOMES and MATCH not in FAILURE_OUTCOMES
+
+
+# --- ADR-028 2차 개정: 시간 제한, 연속 통신 오류, 진행 없음 ---------------------------------
+
+
+def conn_error() -> JusoUnavailableError:
+    return JusoUnavailableError("connection_ConnectError")
+
+
+def test_revised_procedure_constants() -> None:
+    assert REQUEST_TIMEOUT_SECONDS == 10.0
+    assert CONSECUTIVE_FAILURE_LIMIT == 3
+    assert STALL_SECONDS == 300.0
+
+
+@pytest.mark.parametrize(
+    "errors",
+    [
+        [conn_error()] * 3,
+        [JusoUnavailableError("http_429")] * 3,
+        [JusoUnavailableError("http_503"), conn_error(), JusoUnavailableError("http_500")],
+        [JusoUnavailableError("connection_ReadTimeout")] * 3,
+    ],
+)
+def test_three_consecutive_streak_failures_stop(errors: list[Any]) -> None:
+    time = FakeTime()
+    fetch = FakeFetch(time, [*errors, body([juso_row()])])
+    with pytest.raises(AccessProblemError) as caught:
+        asyncio.run(measure([RECORD, RECORD], fetch, Pacer(time.clock, time.sleep)))
+    assert caught.value.reason.startswith("consecutive_transport_errors:")
+    assert caught.value.call_no == 3 and len(fetch.calls) == 3
+
+
+def test_streak_spans_records() -> None:
+    # 앞 건이 연속 2번 실패 뒤 회복하면 0으로 돌아간다. 회복하지 않으면 다음 건과 이어서 센다
+    replies = [conn_error(), conn_error(), body([juso_row()]), conn_error(), conn_error()]
+    time = FakeTime()
+    fetch = FakeFetch(time, [*replies, body([juso_row()])])
+    outcomes = asyncio.run(measure([RECORD, RECORD], fetch, Pacer(time.clock, time.sleep)))
+    assert [row.outcome for row in outcomes] == [MATCH, MATCH]
+    assert outcomes[0].transport_reasons == ("connection_ConnectError",) * 2
+    assert outcomes[1].transport_reasons == ("connection_ConnectError",) * 2
+
+
+def test_isolated_non_streak_failures_count_as_transport_error() -> None:
+    # 연속 횟수를 세지 않는 통신 오류(예: HTTP 404, JSON 아님)로만 3번 실패하면 "통신 오류"로 센다
+    errors = [JusoUnavailableError("http_404"), JusoUnavailableError("invalid_json")] * 2
+    outcomes, fetch = run_measure([RECORD], [*errors[:3]])
+    assert outcomes == [TRANSPORT_ERROR] and len(fetch.calls) == 3
+
+
+def test_non_streak_failure_resets_streak() -> None:
+    replies = [conn_error(), conn_error(), JusoUnavailableError("http_404"), conn_error()]
+    time = FakeTime()
+    fetch = FakeFetch(time, [*replies, conn_error(), body([juso_row()])])
+    outcomes = asyncio.run(measure([RECORD, RECORD], fetch, Pacer(time.clock, time.sleep)))
+    assert [row.outcome for row in outcomes] == [TRANSPORT_ERROR, MATCH]
+
+
+def test_wall_clock_gap_stops_as_stalled() -> None:
+    time = FakeTime()
+    fetch = FakeFetch(time, [body([juso_row()])] * 3)
+    walls = iter([0.0, 10.0, 10.0 + STALL_SECONDS + 1, 999_999.0])
+    with pytest.raises(AccessProblemError) as caught:
+        asyncio.run(
+            measure([RECORD] * 3, fetch, Pacer(time.clock, time.sleep), wall=lambda: next(walls))
+        )
+    assert caught.value.reason == "stalled"
+    assert len(fetch.calls) == 2  # 두 번째 건이 끝난 뒤 간격을 보고 멈춘다
+
+
+def test_on_outcome_is_called_per_record() -> None:
+    time = FakeTime()
+    fetch = FakeFetch(time, [body([juso_row()]), body([])])
+    seen: list[str] = []
+    asyncio.run(
+        measure(
+            [RECORD, RECORD],
+            fetch,
+            Pacer(time.clock, time.sleep),
+            on_outcome=lambda row: seen.append(row.outcome),
+        )
+    )
+    assert seen == [MATCH, NO_RESULT]

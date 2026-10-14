@@ -4,6 +4,7 @@
 결과를 본 뒤에는 바꾸지 않는다.
 """
 
+import asyncio
 import hashlib
 import re
 from collections.abc import Awaitable, Callable, Iterable, Sequence
@@ -12,6 +13,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Protocol
 
 from app.address.juso import (
+    CONNECTION_REASON,
     JusoKeywordError,
     JusoPage,
     JusoUnavailableError,
@@ -62,6 +64,11 @@ def keyword_of(road_addr: str) -> str:
 
 CALL_INTERVAL_SECONDS = 1.0  # 1초에 1건, 순차 호출 (ADR-028)
 TRANSPORT_RETRIES = 2  # 통신 오류 재시도 횟수 (모두 3번 호출)
+REQUEST_TIMEOUT_SECONDS = 10.0  # 요청마다 시간 제한 (ADR-028 2차 개정)
+CONSECUTIVE_FAILURE_LIMIT = 3  # HTTP 429·5xx·연결 오류가 연속 이만큼이면 접근 문제로 멈춘다
+STALL_SECONDS = 300.0  # 이 시간 동안 한 건도 끝나지 않으면 멈춘다 (벽시계 기준)
+STOP_CONSECUTIVE = "consecutive_transport_errors"
+STOP_STALLED = "stalled"
 PASS_RATE = Decimal("0.95")
 HOLD_RATE = Decimal("0.90")
 
@@ -87,8 +94,6 @@ OUTCOME_LABELS = {
 YEAR_BANDS = ("1999년 이전", "2000~2009", "2010~2015", "2016~2020", "2021년 이후", "개업일 없음")
 
 _LOT = re.compile(r"^(?P<san>산)?(?P<main>\d+)(?:-(?P<sub>\d+))?$")
-_ERROR_CODE_REASON = "error_code_"
-_UNEXPECTED_FORMAT = "unexpected_format"
 
 Lot = tuple[str, bool, int, int]  # (법정동 이름, 산 여부, 본번, 부번)
 
@@ -107,6 +112,8 @@ class SampleRecord:
 class Outcome:
     record: SampleRecord
     outcome: str
+    # 이 건에서 난 통신 오류의 종류(재시도로 회복한 것 포함). 일치 여부와 따로 볼 수 있게 남긴다
+    transport_reasons: tuple[str, ...] = ()
 
 
 class AccessProblemError(Exception):
@@ -182,6 +189,8 @@ class Pacer:
         self._interval = interval
         self._last: float | None = None
         self.calls = 0
+        self.consecutive_failures = 0  # 연속된 HTTP 429·5xx·연결 오류 호출 수
+        self.transport_reasons: list[str] = []  # 지금 재는 건에서 난 통신 오류
 
     async def wait(self) -> None:
         if self._last is not None:
@@ -203,13 +212,32 @@ async def _call(
         await pacer.wait()
         try:
             payload = await fetch(keyword, 1, add_info=add_info)
+        except JusoUnavailableError as exc:
+            pacer.transport_reasons.append(exc.reason)
+            if is_streak_failure(exc.reason):
+                pacer.consecutive_failures += 1
+                if pacer.consecutive_failures >= CONSECUTIVE_FAILURE_LIMIT:
+                    raise AccessProblemError(
+                        f"{STOP_CONSECUTIVE}:{exc.reason}", pacer.calls
+                    ) from None
+            else:
+                pacer.consecutive_failures = 0
+            continue
+        pacer.consecutive_failures = 0
+        try:
             return parse_response(payload, 1), payload
         except JusoKeywordError:
             return KEYWORD_ERROR
-        except JusoUnavailableError as exc:
-            if exc.reason.startswith(_ERROR_CODE_REASON) or exc.reason == _UNEXPECTED_FORMAT:
-                raise AccessProblemError(exc.reason, pacer.calls) from None
+        except JusoUnavailableError as exc:  # 오류코드·형식 이상은 접근 문제
+            raise AccessProblemError(exc.reason, pacer.calls) from None
     return TRANSPORT_ERROR
+
+
+def is_streak_failure(reason: str) -> bool:
+    """연속 횟수를 세는 통신 오류: HTTP 429, HTTP 5xx, 연결 실패·시간 초과."""
+    return (
+        reason.startswith(CONNECTION_REASON) or reason == "http_429" or reason.startswith("http_5")
+    )
 
 
 async def measure_one(record: SampleRecord, fetch: Fetch, pacer: Pacer) -> str:
@@ -235,11 +263,31 @@ async def measure(
     fetch: Fetch,
     pacer: Pacer,
     progress: Callable[[int, int], None] | None = None,
+    wall: Callable[[], float] | None = None,
+    on_outcome: Callable[[Outcome], None] | None = None,
 ) -> list[Outcome]:
-    """표본을 순서대로 한 건씩 잰다. 접근 문제면 `AccessProblemError`로 멈춘다."""
+    """표본을 순서대로 한 건씩 잰다. 접근 문제면 `AccessProblemError`로 멈춘다.
+
+    `wall`(벽시계)을 주면 한 건이 끝날 때마다 앞 건이 끝난 뒤로 `STALL_SECONDS`가 지났는지 본다.
+    컴퓨터가 잠들면 단조 시계가 멈추므로 벽시계로 본다. 한 건이 그보다 오래 걸려도 멈춘다.
+    """
     outcomes: list[Outcome] = []
+    last = wall() if wall is not None else None
     for done, record in enumerate(sample, start=1):
-        outcomes.append(Outcome(record, await measure_one(record, fetch, pacer)))
+        pacer.transport_reasons = []
+        try:
+            name = await asyncio.wait_for(measure_one(record, fetch, pacer), STALL_SECONDS)
+        except TimeoutError:
+            raise AccessProblemError(STOP_STALLED, pacer.calls) from None
+        if wall is not None and last is not None:
+            now = wall()
+            if now - last > STALL_SECONDS:
+                raise AccessProblemError(STOP_STALLED, pacer.calls)
+            last = now
+        outcome = Outcome(record, name, tuple(pacer.transport_reasons))
+        outcomes.append(outcome)
+        if on_outcome is not None:
+            on_outcome(outcome)
         if progress is not None:
             progress(done, pacer.calls)
     return outcomes
