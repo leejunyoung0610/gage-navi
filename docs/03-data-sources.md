@@ -120,3 +120,4 @@ HWP / HWPX / PDF. 변환 방식은 docs/20 §10.2, T-051S 스파이크로 확정
 | 층 이력·과거 폐업 횟수 재계산 | 인허가 적재·정규화·미갱신 표시 후 | `jobs.build_history` |
 | 기준율 통계·모형 카드 | 이력 재계산 후 | `jobs.compute_base_rates` |
 | 공고 수집·변경 감지 | 매일 09:00, 18:00 | `jobs.collect_announcements` |
+| 정정 요청 메시지 삭제(처리 후 1년)·웹 재생성 재시도 | 매일 1회 (T-023, 운영 cron은 T-081) | `jobs.correction_maintenance` |

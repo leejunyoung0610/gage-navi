@@ -29,6 +29,9 @@
 | `CONFLICT` | 409 | 규칙 승인 경합 등 |
 | `INTERNAL` | 500 | 그 외 (메시지는 일반 문구, 상세는 Sentry) |
 
+- **`VALIDATION_ERROR`의 `details.fields`** (T-023): `{"<필드>": "<오류 종류>"}`. 필드는 요청 위치(`body`·`query`·`path`)를 뺀 경로를 `.`로 이은 것(`"message"`, `"items.0.code"`), 오류 종류는 Pydantic 오류 유형(`missing`, `string_too_long`, `extra_forbidden` 등) 또는 라우터가 정한 값(`invalid_format` 등). **입력값은 응답·로그에 되돌려 보내지 않는다**(FastAPI 기본 형식의 `input`을 쓰지 않는다 — 정정 요청 메시지에 연락처가 들어올 수 있다)
+- **`INTERNAL`** (T-023): 처리되지 않은 예외는 `"일시적인 문제가 생겼어요. 잠시 후 다시 시도해 주세요."`로 응답한다. 로그에는 요청 ID·경로·예외 종류 이름만 남긴다(예외 메시지에 요청 값이 들어 있을 수 있다). DB 엔진도 오류 메시지에 SQL 인자를 넣지 않게 설정한다(`hide_parameters`)
+
 **호출 제한(IP 기준)**: 조회 120회/분(주소 검색 포함), 평가(`*/evaluate`) 20회/분, 정정 요청 5회/시간.
 **압축**: 요청에 `Accept-Encoding: gzip`이 있고 응답 본문이 1,000바이트 이상이면 gzip으로 압축한다(T-022). 큰 목록(층 이력 `history`, 층 미상 기록 `history_without_floor`)을 자르지 않고 전부 내보내는 대신 압축한다.
 **캐시**: 장소 조회 `Cache-Control: public, max-age=300` (API 앞에 CDN 없음) / 평가 `no-store`. 웹의 장소 페이지는 ISR(1일)이며, 관리자가 정정 요청으로 기록을 숨기면 API가 웹의 `POST /api/revalidate`(헤더 `x-revalidate-secret`)를 호출해 해당 `/place/{pnu}`·`/place/{pnu}/{floor}`를 즉시 재생성한다.
@@ -151,7 +154,11 @@
 - 응답에 전화번호 등 개인정보 필드 없음
 
 ### `POST /api/v1/places/{pnu}/corrections`
-요청 `{"floor": "1", "record_id": 1032, "kind": "wrong_info", "message": "…"}` → 201 `{"data": {"id": 55}}`. 연락처 필드 없음.
+요청 `{"floor": "1", "record_id": 1032, "kind": "wrong_info", "message": "…"}` → 201 `{"data": {"id": 55}, "meta": {"request_id": "01J…"}}`. 연락처 필드 없음.
+- `kind`: `wrong_info` | `remove_request` | `other`. `message`: 1~1,000자(필수). `floor`(층 형식, docs/10 §3)·`record_id`는 선택
+- `record_id`를 주면 그 필지에서 이력에 보이는 기록이어야 한다(아니면 422 `details.fields.record_id = "not_in_place"`). `floor`도 주면 기록의 층과 같아야 한다(아니면 `details.fields.floor = "not_record_floor"`)
+- 필지가 없으면 404 `NO_HISTORY`. 호출 제한 5회/시간(IP), `Cache-Control: no-store`
+- **요청 본문은 로그에 남기지 않는다.** 자유 입력 `message`에 연락처 같은 개인정보가 들어올 수 있다. 처리 후 1년이 지나면 `message`를 지운다(docs/60 §5, docs/04)
 
 ### `GET /api/v1/stats/model-card`
 최신 `model_card.payload` (docs/10 §7.3).
@@ -202,6 +209,15 @@
 
 ## 3. 관리자 API (`/admin/v1`, 세션 쿠키 필요)
 
+**인증** (T-023, docs/01 §6)
+- 계정은 API 서버에서 사람이 직접 실행하는 명령으로만 만든다: `python -m jobs.set_admin_password <사용자명>`(없으면 만들고, 있으면 비밀번호를 바꾼다). 비밀번호는 화면에 보이지 않는 입력으로 두 번 받고, 출력·로그·파일에 남기지 않는다. 비밀번호를 바꾸면 그 관리자의 세션을 전부 지운다. 환경 변수로 만드는 초기 계정은 없다
+- `POST /login` `{"username", "password"}` → 200 `{"data": {"username", "expires_at"}}` + 쿠키 `gn_admin_session`(`HttpOnly; Secure; SameSite=Strict; Path=/admin/v1; Max-Age=28800`). 쿠키 값은 무작위 32바이트 토큰이고 DB(`admin_session`)에는 SHA-256 해시만 둔다. 세션은 **로그인 후 8시간** 또는 **마지막 요청 후 30분**이 지나면 만료
+- 틀린 사용자명·비밀번호는 같은 401 `UNAUTHORIZED`. 첫 실패부터 10분 안에 5번 틀리면 15분 잠금 — 잠긴 동안은 맞는 비밀번호도 429 `RATE_LIMITED` + `Retry-After`. 실패 횟수·잠금은 DB(`admin_user`)에 둔다
+- `POST /logout` → 204, 서버에서 세션을 지운다
+- 세션 쿠키가 없거나 만료되면 401 `UNAUTHORIZED`
+- **CSRF**: 상태를 바꾸는 요청(`POST`·`PATCH`·`PUT`·`DELETE`, `/login` 포함)은 헤더 `X-Admin-Request: 1`이 있어야 한다. 없으면 403 `FORBIDDEN`(쿠키 `SameSite=Strict`와 함께, 다른 사이트의 폼 전송은 이 헤더를 붙일 수 없다)
+
+
 | Method | Path | 설명 |
 |---|---|---|
 | POST | `/login`, `/logout` | 세션 (로그인 실패 5회/10분 → 15분 잠금) |
@@ -220,3 +236,12 @@
 | POST | `/rules/{rule_id}/second-review` | `{"note", "seconds_spent"}` → `review_log(review_kind='second_review')`. 첫 승인 후 24시간 미만이면 409 |
 
 `test` split 평가는 하루 1회로 제한하고 실행 기록을 남긴다(과적합 방지, docs/50 §5).
+
+**정정 요청 처리** (T-023)
+- `GET /corrections?status=open|resolved|rejected&limit=100` — 최근 접수 순. `status`를 빼면 전부, `limit` 1~500. 항목: `id, pnu, floor, record_id, kind, message, status, resolution_note, created_at, resolved_at, revalidated_at`. 목록을 읽기 전에 처리 후 1년이 지난 요청의 `message`를 지운다(`jobs.correction_maintenance`와 같은 함수)
+- `POST /corrections/{id}/resolve` `{"action", "note"?}`(`note` 1,000자 이하) → 200 `{"data": {"id", "status", "revalidated"}}`
+  - `suppress_record` → `status='resolved'`, `record_suppression(record_id, reason=kind, request_id)`. 같은 트랜잭션에서 그 필지의 `parcel`·`floor_summary`를 월간 `jobs.build_history`와 **같은 빌드 함수로** 다시 만든다(docs/10 §7.1). 요청에 `record_id`가 없으면 422 `details.fields.action = "no_record"`. 이미 숨긴 기록이면 숨김은 그대로 두고 요청만 처리한다
+  - `none` → `status='rejected'`. 숨기지 않고 재생성도 하지 않는다
+  - `status`가 `open`이 아니면 409 `CONFLICT`
+  - **웹 재생성은 커밋 뒤에** 호출한다: `WEB_REVALIDATE_URL`에 `POST`, 헤더 `x-revalidate-secret: REVALIDATE_SECRET`, 본문 `{"paths": ["/place/{pnu}", "/place/{pnu}/{floor}"]}`(숨긴 기록에 층이 없으면 첫 경로만). 실패(연결 오류·2xx 아님)하면 최대 3번까지 시도하고, 그래도 실패하면 `revalidated: false`로 응답하고 경고 로그(요청 id·실패 종류)를 남긴다. `revalidated_at`이 비어 있는 숨김 처리 요청은 `jobs.correction_maintenance`가 다시 호출한다. 재생성이 실패해도 숨김 처리는 취소하지 않는다(웹 페이지는 ISR 1일 안에 갱신된다)
+
