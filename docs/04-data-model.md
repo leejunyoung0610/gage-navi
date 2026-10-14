@@ -172,7 +172,7 @@ CREATE TABLE correction_request (
   kind        TEXT NOT NULL CHECK (kind IN ('wrong_info','remove_request','other')),
   message     TEXT NOT NULL CHECK (char_length(message) <= 1000),
   status      TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','resolved','rejected')),
-  resolution_note TEXT,
+  resolution_note TEXT,            -- rejected면 거절 사유(필수, API에서 검사). 1년 뒤에도 남긴다
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   resolved_at TIMESTAMPTZ,
   revalidated_at TIMESTAMPTZ               -- 숨김 처리 뒤 웹 재생성 호출이 성공한 시각 (T-023). NULL이면 재시도 대상

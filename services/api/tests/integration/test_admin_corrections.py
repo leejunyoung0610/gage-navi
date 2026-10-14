@@ -467,6 +467,30 @@ def test_none_rejects_without_hiding_and_conflicts_after(
     assert resolve(client, 999999).status_code == 404
 
 
+def test_reject_requires_note(client: TestClient, web: Web, seeded: str) -> None:
+    """`none`(→ `rejected`)은 사유가 비었거나 공백뿐이면 422, 요청은 그대로 `open`."""
+    correction_id = submit(client, 3)
+    assert login(client).status_code == 200
+    url = f"/admin/v1/corrections/{correction_id}/resolve"
+    for body in (
+        {"action": "none"},
+        {"action": "none", "note": None},
+        {"action": "none", "note": ""},
+        {"action": "none", "note": " \n\t "},
+    ):
+        response = client.post(url, json=body, headers=CSRF)
+        assert response.status_code == 422, body
+        error = response.json()["error"]
+        assert error["code"] == "VALIDATION_ERROR"
+        assert error["details"] == {"fields": {"note": "note_required"}}
+        assert response.headers["X-Request-ID"] == response.json()["meta"]["request_id"]
+    assert fetch(seeded, "SELECT status, resolution_note FROM correction_request") == [
+        ("open", None)
+    ]
+    # 숨김(`suppress_record`)은 메모 없이도 된다
+    assert client.post(url, json={"action": "suppress_record"}, headers=CSRF).status_code == 200
+
+
 def test_rebuild_matches_full_build(client: TestClient, seeded: str) -> None:
     """숨긴 기록이 있는 필지: 즉시 재계산 결과 = 전체 `build_history` 결과 (docs/10 §7.1)."""
     ids = [submit(client, 3), submit(client, 5), submit(client, 6, pnu=P2)]

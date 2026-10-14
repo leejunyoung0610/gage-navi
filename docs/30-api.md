@@ -241,7 +241,7 @@
 
 **정정 요청 처리** (T-023)
 - `GET /corrections?status=open|resolved|rejected&limit=100` — 최근 접수 순. `status`를 빼면 전부, `limit` 1~500. 항목: `id, pnu, floor, record_id, kind, message, status, resolution_note, created_at, resolved_at, revalidated_at`. 목록을 읽기 전에 처리 후 1년이 지난 요청의 `message`를 지운다(`jobs.correction_maintenance`와 같은 함수)
-- `POST /corrections/{id}/resolve` `{"action", "note"?}`(`note` 1,000자 이하) → 200 `{"data": {"id", "status", "revalidated"}}`
+- `POST /corrections/{id}/resolve` `{"action", "note"}`(`note` 1,000자 이하. `suppress_record`는 선택, `none`(→ `rejected`)은 거절 사유로 필수 — 비었거나 공백뿐이면 422 `{"fields": {"note": "note_required"}}`) → 200 `{"data": {"id", "status", "revalidated"}}`
   - `suppress_record` → `status='resolved'`, `record_suppression(record_id, reason=kind, request_id)`. 같은 트랜잭션에서 그 필지의 `parcel`·`floor_summary`를 월간 `jobs.build_history`와 **같은 빌드 함수로** 다시 만든다(docs/10 §7.1). 요청에 `record_id`가 없으면 422 `details.fields.action = "no_record"`. 이미 숨긴 기록이면 숨김은 그대로 두고 요청만 처리한다
   - `none` → `status='rejected'`. 숨기지 않고 재생성도 하지 않는다
   - `status`가 `open`이 아니면 409 `CONFLICT`

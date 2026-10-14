@@ -247,7 +247,7 @@
   - (2026-10-14, 제안 티켓에서 옮김 — 사용자 지시) **422·500 공통 오류 처리기**를 먼저 넣는다. 정정 요청이 첫 쓰기 API라 입력 오류 형식이 필요하다. `VALIDATION_ERROR`(`details.fields`, 입력값을 되돌려 보내지 않음)·`INTERNAL`(일반 문구, 로그엔 예외 종류만) — docs/30 §1
   - (2026-10-14 사용자 결정) 관리자 계정은 사람이 터미널에서 실행하는 `python -m jobs.set_admin_password <사용자명>`으로만 만든다(비밀번호는 보이지 않는 입력, 출력·저장 안 함). `.env.example`의 `ADMIN_BOOTSTRAP_*`·`SESSION_SECRET`은 뺀다
   - (2026-10-14 사용자 결정) 세션은 DB 테이블 `admin_session`(토큰 해시만), 8시간 절대 만료 + 30분 미사용 만료, 로그아웃·비밀번호 변경 시 서버에서 삭제. 실패 횟수·잠금은 DB(`admin_user`). 상태를 바꾸는 관리자 요청은 `X-Admin-Request` 헤더 확인(CSRF). 마이그레이션 `0007_admin_auth`(docs/04)
-  - (2026-10-14 사용자 결정) 숨김 처리 때 그 필지의 `parcel`·`floor_summary`를 월간 `build_history`와 같은 빌드 함수로 즉시 다시 만든다(docs/10 §7.1). 웹 재생성은 커밋 뒤에 호출, 실패하면 기록(`revalidated_at` NULL·경고 로그)하고 재시도. `action: none` → `rejected`
+  - (2026-10-14 사용자 결정) 숨김 처리 때 그 필지의 `parcel`·`floor_summary`를 월간 `build_history`와 같은 빌드 함수로 즉시 다시 만든다(docs/10 §7.1). 웹 재생성은 커밋 뒤에 호출, 실패하면 기록(`revalidated_at` NULL·경고 로그)하고 재시도. `action: none` → `rejected`이고 거절 사유(`note`)가 필수 — 비었거나 공백뿐이면 422
   - (2026-10-14, 제안 티켓에서 옮김 — 사용자 지시) **요청 ID를 요청마다 한 번** 만들어 응답 `meta.request_id`·헤더 `X-Request-ID`·로그에 같은 값을 쓴다. 요청마다 접속 로그 한 줄(요청 ID·경로·상태·지연 시간, docs/01 §6). 사용자가 알려 준 오류 화면의 ID로 로그를 찾을 수 있어야 한다(docs/30 §1)
   - (2026-10-14 사용자 결정) 정정 요청 본문은 로그 금지. 처리 후 1년이 지난 요청은 `message`만 지우고 행은 남긴다 — `jobs.correction_maintenance`(재생성 재시도 포함, docs/03 §5)와 관리자 목록 조회
 - **수용 기준**
