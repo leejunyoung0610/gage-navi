@@ -29,6 +29,8 @@
 | `CONFLICT` | 409 | 규칙 승인 경합 등 |
 | `INTERNAL` | 500 | 그 외 (메시지는 일반 문구, 상세는 Sentry) |
 
+- **요청 ID** (T-023, 2026-10-14 사용자 지시): 요청마다 **한 번** 만든다(ULID 26자). 같은 값을 성공·오류 응답의 `meta.request_id`, 응답 헤더 `X-Request-ID`, 그 요청에서 남기는 모든 로그(`request_id=…`), Sentry 이벤트 태그(T-082)에 쓴다. 사용자가 오류 화면의 ID를 알려 주면 그 값으로 로그를 찾는다. 클라이언트가 보낸 `X-Request-ID`는 쓰지 않는다(위조·충돌 방지)
+- **접속 로그** (T-023): 요청마다 한 줄 `request_id=… method=… path=… status=… latency_ms=…`(로거 `app.access`). 경로는 쿼리스트링을 뺀 것이고 본문은 남기지 않는다(docs/01 §6)
 - **`VALIDATION_ERROR`의 `details.fields`** (T-023): `{"<필드>": "<오류 종류>"}`. 필드는 요청 위치(`body`·`query`·`path`)를 뺀 경로를 `.`로 이은 것(`"message"`, `"items.0.code"`), 오류 종류는 Pydantic 오류 유형(`missing`, `string_too_long`, `extra_forbidden` 등) 또는 라우터가 정한 값(`invalid_format` 등). **입력값은 응답·로그에 되돌려 보내지 않는다**(FastAPI 기본 형식의 `input`을 쓰지 않는다 — 정정 요청 메시지에 연락처가 들어올 수 있다)
 - **`INTERNAL`** (T-023): 처리되지 않은 예외는 `"일시적인 문제가 생겼어요. 잠시 후 다시 시도해 주세요."`로 응답한다. 로그에는 요청 ID·경로·예외 종류 이름만 남긴다(예외 메시지에 요청 값이 들어 있을 수 있다). DB 엔진도 오류 메시지에 SQL 인자를 넣지 않게 설정한다(`hide_parameters`)
 

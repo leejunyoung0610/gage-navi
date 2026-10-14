@@ -14,7 +14,7 @@ from app.admin import auth, revalidate
 from app.admin.auth import Admin, LoginLocked, LoginOk
 from app.core import db
 from app.core.errors import ApiError, ErrorCode, ErrorResponse
-from app.core.request_id import new_request_id
+from app.core.request_id import current_request_id
 from app.location.corrections import store
 from app.location.corrections.store import Action, ResolveProblem, Status
 
@@ -36,7 +36,7 @@ class Meta(BaseModel):
 
 
 def _meta() -> Meta:
-    return Meta(request_id=new_request_id())
+    return Meta(request_id=current_request_id())
 
 
 class LoginIn(BaseModel):

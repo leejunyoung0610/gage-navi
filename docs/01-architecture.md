@@ -151,7 +151,7 @@ gage-navi/
 
 - 관리자 화면·API: 단일 관리자 계정, 비밀번호 해시(argon2) + 세션 쿠키(HttpOnly, Secure, SameSite=Strict). `/admin/*` 외부 IP 제한 옵션
 - 공개 API: IP 기준 호출 제한(평가 API 분당 20회, 조회 API 분당 120회), CORS 허용 도메인 고정
-- 요청 본문 로그 금지. 로그에는 요청 ID, 경로(쿼리스트링 제외 — 주소 검색어가 들어 있다), 상태 코드, 지연 시간만. `funding`·`closure` 요청 본문이 로그에 찍히지 않는지 테스트로 검증 (docs/50 §6)
+- 요청 본문 로그 금지. 로그에는 요청 ID, 경로(쿼리스트링 제외 — 주소 검색어가 들어 있다), 상태 코드, 지연 시간만. 요청 ID는 요청마다 한 번 만들어 응답(`meta.request_id`, `X-Request-ID`)·로그·Sentry에 같은 값을 쓴다(docs/30 §1, T-023). `funding`·`closure` 요청 본문이 로그에 찍히지 않는지 테스트로 검증 (docs/50 §6)
 - 비밀 값은 환경 변수로만. 저장소에 키 커밋 시 CI 실패(gitleaks)
 
 ## 7. 관측

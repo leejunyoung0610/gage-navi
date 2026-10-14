@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from app.core import db
 from app.core.errors import ApiError, ErrorCode, ErrorResponse
 from app.core.ratelimit import limit_correction
-from app.core.request_id import new_request_id
+from app.core.request_id import current_request_id
 from app.location.corrections import store
 from app.location.corrections.store import CreateProblem, Kind
 from app.location.places.router import (
@@ -86,5 +86,5 @@ async def create_correction(pnu: str, body: CorrectionIn, response: Response) ->
     assert isinstance(result, int)
     response.headers["Cache-Control"] = "no-store"
     return CorrectionResponse(
-        data=CorrectionCreated(id=result), meta=CreatedMeta(request_id=new_request_id())
+        data=CorrectionCreated(id=result), meta=CreatedMeta(request_id=current_request_id())
     )

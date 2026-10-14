@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 from app.core.errors import ApiError, ErrorCode, ErrorResponse
 from app.core.ratelimit import limit_lookup
-from app.core.request_id import new_request_id
+from app.core.request_id import current_request_id
 from app.location.places import build
 from app.location.places.build import FloorScale, HiddenReason, RateRow, Record
 from app.location.places.queries import ModelCardRef, PlaceReader, reader_session
@@ -297,7 +297,7 @@ async def get_place(pnu: str, response: Response) -> PlaceResponse:
             records_without_floor=len(floorless),
             history_without_floor=[_place_record(r, as_of) for r in floorless],
         ),
-        meta=Meta(request_id=new_request_id(), data_as_of=as_of),
+        meta=Meta(request_id=current_request_id(), data_as_of=as_of),
     )
 
 
@@ -354,5 +354,5 @@ async def get_floor(pnu: str, floor: str, response: Response) -> FloorResponse:
             notices=build.notices(summary.has_concurrent, history, pre_2005_floorless),
             data_as_of=as_of,
         ),
-        meta=Meta(request_id=new_request_id(), data_as_of=as_of),
+        meta=Meta(request_id=current_request_id(), data_as_of=as_of),
     )
