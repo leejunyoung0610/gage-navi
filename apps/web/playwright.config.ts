@@ -23,10 +23,11 @@ export default defineConfig({
       },
     },
   ],
+  // 서비스 워커는 프로덕션 빌드에만 있으므로(next.config.ts) 빌드한 앱으로 확인한다 (tests/e2e/pwa.spec.ts)
   webServer: {
-    command: `pnpm dev --port ${port}`,
+    command: `pnpm build && pnpm start --port ${port}`,
     url: `http://localhost:${port}`,
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    timeout: 240_000,
   },
 });

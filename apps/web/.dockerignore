@@ -1,0 +1,10 @@
+node_modules
+.next
+out
+test-results
+playwright-report
+tsconfig.tsbuildinfo
+.env*
+public/sw.js
+public/sw.js.map
+public/swe-worker-*.js
