@@ -138,7 +138,7 @@
 - `bulk_closure_detail`(T-022, 2026-10-14): `bulk_closure = true`인 기록에 `closure_surge_day`의 그날(관할 = 기록의 `jurisdiction_code`, 날짜 = `closed_on`) `jurisdiction_label`·`closure_count`. 화면 배지 설명 "이날 {관할 이름}에서 … 처리됐어요({n}건)"(docs/40 §4.4)에 쓴다. `bulk_closure = false`이면 `null`. 관할 이름을 정할 수 없었으면(`jurisdiction_label`이 NULL) `jurisdiction_label: null`이고 건수는 그대로 준다. 필지 응답의 `history_without_floor`에도 같은 필드가 있다
 - `ho_groups`: 이 층 이력에서 `ho_list`의 같은 원소를 가진 기록이 2건 이상인 호마다 1개, `record_ids`는 이력 순서. `ho` 문자열 오름차순
 - `base_rate`: 기준율 모형 카드가 아직 계산되지 않았으면(`method_version='w0'`이 아닌 `model_card`가 없으면) `null`. 쓰는 카드는 그런 카드 중 가장 최근 것(`id` 최대)이고, `base_rate` 행은 그 카드와 같은 `snapshot_label`·`method_version`이다
-  - `prior_closures_now`: 이 층의 현재 과거 폐업 횟수(docs/10 §7.2 "화면의 이 층의 현재 과거 폐업 횟수", `F` 기준), `bucket`은 그 버킷(`0`~`3`, `4+`). `display`와 상관없이 준다
+  - `prior_closures_now`: 이 층의 현재 과거 폐업 횟수(docs/10 §7.2 "화면의 이 층의 현재 과거 폐업 횟수": `F`에서 급증일 폐업과 숨김 기록(`record_suppression`)을 뺀 폐업 수 — 화면 이력과 같은 기록만 센다), `bucket`은 그 버킷(`0`~`3`, `4+`). `display`와 상관없이 준다
   - 기준율 선택(`display=true`): `primary` = 같은 규모·같은 버킷의 시군구(PNU 앞 5자리) 행이 `n ≥ 200`이면 그 행, 아니면 서울(`11`) 행. `secondary` = `primary`가 시군구일 때만 서울 행, 아니면 `null`. `baseline` = `primary`와 같은 범위의 같은 규모 `0` 버킷 행이 `n ≥ 200`이면 그 행, 아니면 서울 `0` 버킷 행
   - `snapshot_label`·`method_version`: 쓴 카드의 값. `display=false`여도 준다
 - `floor_scale`: 이 층의 규모 `single`(동시에 영업한 최대 점포 수 1) / `small`(2~9) / `large`(10 이상). `summary.max_concurrent`로 정한다(docs/10 §7.2). `primary`·`baseline`·`secondary`는 **이 규모의 기준율**(`base_rate.floor_scale`)이다 (T-019b, 응답 구현은 T-022)
