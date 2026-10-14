@@ -108,7 +108,7 @@ docs/21 §8 (F-S1~S10), docs/22 §7 (C-S1~S12). 가상 규칙 픽스처는 `test
 - `test_place_response_no_phone`: 장소 응답 스키마에 전화번호 필드 없음
 - `test_profile_extra_forbid`: 알 수 없는 프로필 필드(예: `credit_score_exact`) → 422
 - 관리자 API 인증 없는 접근 → 401, 로그인 잠금 동작
-- gitleaks(비밀 커밋 방지), 의존성 취약점 스캔(pip-audit, pnpm audit) 주 1회
+- gitleaks(비밀 커밋 방지) PR·push마다(§8 `gitleaks`), 의존성 취약점 스캔(pip-audit, pnpm audit) 주 1회
 
 ## 7. 공개 게이트
 
@@ -239,4 +239,5 @@ docs/21 §8 (F-S1~S10), docs/22 §7 (C-S1~S12). 가상 규칙 픽스처는 `test
 | `e2e` | PR(라벨) · main | Playwright (API 목 서버) |
 | `e2e-full` | main · 게이트 판정 시 | docker compose(db+api+web) 실제 스택 Playwright — 정정 요청·재생성 흐름 |
 | `mutation` | 주 1회 | mutmut `rules/engine` |
-| `security` | 주 1회 | gitleaks, pip-audit, pnpm audit |
+| `gitleaks` | PR · push | 전체 커밋 기록의 비밀 값 검사(`.github/workflows/secrets.yml`, 버전·체크섬 고정, 찾은 값은 가림). 걸리면 실패 (ADR-029) |
+| `security` | 주 1회 | pip-audit, pnpm audit |
