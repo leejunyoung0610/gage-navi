@@ -4,7 +4,7 @@
 
 소상공인이 **자리 계약 · 정책자금 · 폐업**을 결정할 때, 공공데이터와 검증 가능한 규칙으로 돕는 웹 서비스입니다.
 
-**현재 상태: 개발 중, 서비스는 공개하지 않았습니다.** 지금은 첫 모듈인 **자리 이력**의 데이터 파이프라인과 API를 만들고 있습니다. 정책자금·폐업 지원 모듈과 웹 화면은 설계 단계입니다. 서비스 공개는 데이터·법적 기준을 정해 둔 공개 게이트([docs/50 §7](docs/50-quality.md))를 통과한 뒤에 합니다. 저장소를 먼저 공개한 이유는 [ADR-029](docs/02-adr.md)에 적었습니다.
+**현재 상태: 개발 중, 서비스는 공개하지 않았습니다.** 개발 중인 것은 **자리 이력** 하나입니다 — 데이터 파이프라인과 API를 만들었고 웹 화면을 만들고 있습니다. 정책자금·폐업 지원 모듈은 설계 문서만 있고 **보류**했습니다. 폐업 지원은 공식 창구(희망리턴패키지)와 겹치고, 건물·층 단위의 과거 가게 이력은 다른 곳에서 보기 어려워 자리 이력을 깊게 만들기로 했습니다([ADR-030](docs/02-adr.md)). 서비스 공개는 데이터·법적 기준을 정해 둔 공개 게이트([docs/50 §7](docs/50-quality.md))를 통과한 뒤에 합니다. 저장소를 먼저 공개한 이유는 [ADR-029](docs/02-adr.md)에 적었습니다.
 
 ## 문제
 
@@ -71,12 +71,12 @@ flowchart LR
   juso --> search
   places --> web
   search --> web
-  rules[규칙 엔진·공고 추출<br/>정책자금·폐업 — 설계 단계]:::planned
+  rules[규칙 엔진·공고 추출<br/>정책자금·폐업 — 설계만, 보류]:::planned
   rules -.-> api
   classDef planned stroke-dasharray: 5 5
 ```
 
-전체 구성(정책자금·폐업 모듈 포함)과 모듈 경계는 [docs/01](docs/01-architecture.md)에 있습니다.
+전체 구성(보류한 정책자금·폐업 모듈 포함)과 모듈 경계는 [docs/01](docs/01-architecture.md)에 있습니다.
 
 **기술 스택**
 - 백엔드: Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2(async), Alembic, uv
@@ -112,13 +112,13 @@ AI 코딩 에이전트(Claude Code)와 **티켓 단위**로 작업합니다. 사
 |---|---|
 | [docs/00-product](docs/00-product.md) | 목표, 사용자, 범위, 하지 않는 것, 성공 기준 |
 | [docs/01-architecture](docs/01-architecture.md) | 시스템 구성, 기술 스택, 저장소 구조, 보안 |
-| [docs/02-adr](docs/02-adr.md) | 설계 결정 기록(ADR-001 ~ 029)과 의존성 기록 |
+| [docs/02-adr](docs/02-adr.md) | 설계 결정 기록(ADR-001 ~ 030)과 의존성 기록 |
 | [docs/03-data-sources](docs/03-data-sources.md) | 외부 데이터·API, 수집 방식, 배치 일정, 확인할 항목 |
 | [docs/04-data-model](docs/04-data-model.md) | DB 스키마 (마이그레이션의 기준) |
 | [docs/10-module-location](docs/10-module-location.md) | 자리 이력: 주소 정규화, 층·호 파싱, 이력, 기준율 통계 |
-| [docs/20-rule-engine](docs/20-rule-engine.md) | 공통 규칙 엔진: DSL, 3치 판정, 최적화, 타임라인, 설명 |
-| [docs/21-module-funding](docs/21-module-funding.md) | 정책자금 모듈 |
-| [docs/22-module-closure](docs/22-module-closure.md) | 폐업 지원 모듈 |
+| [docs/20-rule-engine](docs/20-rule-engine.md) | 공통 규칙 엔진: DSL, 3치 판정, 최적화, 타임라인, 설명 (보류) |
+| [docs/21-module-funding](docs/21-module-funding.md) | 정책자금 모듈 (보류) |
+| [docs/22-module-closure](docs/22-module-closure.md) | 폐업 지원 모듈 (보류) |
 | [docs/30-api](docs/30-api.md) | REST API 명세 |
 | [docs/40-frontend](docs/40-frontend.md) | 화면 구조, 화면별 명세, 문구 규칙·금지 표현 |
 | [docs/50-quality](docs/50-quality.md) | 테스트·데이터 검증, 사전 등록 기준, 공개 게이트, CI |
