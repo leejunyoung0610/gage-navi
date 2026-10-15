@@ -14,9 +14,10 @@ repos:
         language: system
         files: ^services/api/
         types_or: [python, pyi]
+      # 저장소 루트에서 실행되므로 apps/web의 ignore 파일을 직접 지정한다 (생성 파일 lib/api/types.ts 등, T-031)
       - id: prettier
         name: prettier
-        entry: apps/web/node_modules/.bin/prettier --write --ignore-unknown
+        entry: apps/web/node_modules/.bin/prettier --write --ignore-unknown --ignore-path apps/web/.prettierignore
         language: system
         files: ^apps/web/
         exclude: ^apps/web/pnpm-lock\.yaml$
