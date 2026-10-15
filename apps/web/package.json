@@ -17,7 +17,8 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "e2e": "playwright test",
-    "gen:api": "echo 'gen:api는 T-031에서 구현해요 (openapi-typescript)' && exit 1"
+    "gen:api": "node scripts/gen-api.mjs",
+    "gen:api:check": "node scripts/gen-api.mjs --check"
   },
   "dependencies": {
     "@serwist/next": "9.5.13",
@@ -36,6 +37,7 @@
     "eslint": "^9.39.5",
     "eslint-config-next": "^15.5.27",
     "eslint-config-prettier": "^10.1.8",
+    "openapi-typescript": "7.13.0",
     "postcss": "^8.5.29",
     "prettier": "^3.9.10",
     "serwist": "9.5.13",

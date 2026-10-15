@@ -81,9 +81,17 @@ jobs:
           node-version: 20
           cache: pnpm
           cache-dependency-path: apps/web/pnpm-lock.yaml
+      # gen:api 차이 검사(T-031)가 API 코드에서 OpenAPI를 뽑으므로 Python 환경도 필요하다
+      - uses: astral-sh/setup-uv@v10.3.0 # 이 액션은 v10 같은 메이저 태그가 없다
+        with:
+          working-directory: services/api
+          enable-cache: true
+      - name: API 의존성 설치
+        run: uv sync --locked
+        working-directory: services/api
       - name: 의존성 설치
         run: pnpm install --frozen-lockfile
         working-directory: apps/web
-      # gen:api 차이 검사는 T-031, check_copy는 T-037에서 추가
-      - name: eslint · tsc · prettier · vitest
+      # check_copy는 T-037에서 추가
+      - name: eslint · tsc · prettier · vitest · gen:api 차이 검사
         run: make check-web

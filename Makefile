@@ -1,7 +1,7 @@
 API := services/api
 WEB := apps/web
 
-.PHONY: setup check check-api check-web test dev dev-api dev-web e2e gen-api
+.PHONY: setup check check-api check-web check-api-types test dev dev-api dev-web e2e gen-api
 
 setup: ## 의존성 설치 (uv, pnpm, Node 20+ 필요)
 	cd $(API) && uv sync
@@ -25,6 +25,10 @@ check-web:
 	cd $(WEB) && pnpm typecheck
 	cd $(WEB) && pnpm format:check
 	cd $(WEB) && pnpm test
+	$(MAKE) check-api-types
+
+check-api-types: ## lib/api/types.ts가 API의 OpenAPI와 같은지 (T-031). 다르면 make gen-api 후 커밋
+	cd $(WEB) && pnpm gen:api:check
 
 test: ## 전체 테스트 (통합 테스트 포함 — docker compose up -d db 필요)
 	cd $(API) && uv run $(if $(wildcard .env),--env-file ../../.env) pytest

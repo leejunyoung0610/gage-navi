@@ -244,7 +244,7 @@ docs/21 §8 (F-S1~S10), docs/22 §7 (C-S1~S12). 가상 규칙 픽스처는 `test
 |---|---|---|
 | `api-check` | PR · main push | `make check-api` — ruff(check·format --check), mypy, import-linter(모듈 경계·LLM import 제한), pytest(unit·property·scenario·golden) |
 | `api-integration` | PR | docker postgres로 마이그레이션 + 통합 테스트 |
-| `web-check` | PR · main push | `make check-web` — eslint, tsc, prettier --check, vitest (T-004). `gen:api` 차이 검사는 T-031, `check_copy`는 T-037에서 추가 |
+| `web-check` | PR · main push | `make check-web` — eslint, tsc, prettier --check, vitest (T-004), `gen:api` 차이 검사(`make check-api-types` — 다시 만든 `lib/api/types.ts`가 커밋된 파일과 다르면 실패, T-031). `check_copy`는 T-037에서 추가 |
 | `e2e` | PR(라벨) · main | Playwright (API 목 서버) |
 | `e2e-full` | main · 게이트 판정 시 | docker compose(db+api+web) 실제 스택 Playwright — 정정 요청·재생성 흐름 |
 | `mutation` | 주 1회 | mutmut `rules/engine` |
