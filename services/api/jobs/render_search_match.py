@@ -9,6 +9,9 @@
 
 `jobs.measure_search_match`가 `data/derived/search_match/seed_<seed>.jsonl`에 남긴 건별 결과를
 읽는다. 표본은 DB에서 같은 seed로 다시 뽑아 건별 결과와 순서·키가 같은지 확인한다.
+
+`--save`를 주면 집계 값을 `search_match_result`에 저장한다(seed마다 1행, 다시 실행하면 덮어쓴다).
+방법론 페이지가 이 값을 읽는다(T-034, docs/30 `/stats/model-card`).
 """
 
 import argparse
@@ -16,7 +19,11 @@ import asyncio
 import json
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
+
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.address.search_match import (
     REMEASURE_SEED,
@@ -25,12 +32,31 @@ from app.address.search_match import (
     CommitTime,
     Outcome,
     ReportContext,
+    SampleRecord,
+    SearchMatchPayload,
     render_report,
+    summarize,
 )
 from app.core.db import get_engine
 from jobs.measure_search_match import DEFAULT_OUT, detail_path, load
 
 MAIN_REF = "origin/main"
+_UPSERT = """
+INSERT INTO search_match_result (seed, measured_on, payload)
+VALUES (:seed, :measured_on, CAST(:payload AS JSONB))
+ON CONFLICT (seed)
+DO UPDATE SET measured_on = EXCLUDED.measured_on, payload = EXCLUDED.payload, created_at = now()
+"""
+
+
+async def save(engine: AsyncEngine, payload: SearchMatchPayload) -> None:
+    params = {
+        "seed": payload.seed,
+        "measured_on": payload.measured_on,
+        "payload": payload.model_dump_json(),
+    }
+    async with engine.begin() as conn:
+        await conn.execute(text(_UPSERT), params)
 
 
 def _git(*args: str) -> subprocess.CompletedProcess[str]:
@@ -51,6 +77,19 @@ def commit_times(specs: list[str]) -> tuple[CommitTime, ...] | None:
     return tuple(rows)
 
 
+def outcomes_of(seed: int, sample: list[SampleRecord]) -> list[Outcome] | None:
+    """건별 결과 파일 → 표본 순서의 결과. 기록이 표본과 다르면 None."""
+    lines = detail_path(seed).read_text(encoding="utf-8").splitlines()
+    detail = [json.loads(line) for line in lines if line.strip()]
+    keys = [(row["license_type"], row["mgmt_no"]) for row in detail]
+    if keys != [(record.key.license_type, record.key.mgmt_no) for record in sample]:
+        return None
+    return [
+        Outcome(record, row["outcome"], tuple(row["transport_reasons"]))
+        for record, row in zip(sample, detail, strict=True)
+    ]
+
+
 async def run(args: argparse.Namespace) -> int:
     commits = commit_times(args.commit)
     if commits is None:
@@ -59,39 +98,44 @@ async def run(args: argparse.Namespace) -> int:
     engine = get_engine()
     try:
         sample, facts = await load(engine, seed, args.size)
+        outcomes = outcomes_of(seed, sample)
+        if outcomes is None:
+            print("건별 결과 파일의 기록이 표본과 다릅니다. 리포트를 만들지 않았습니다.")
+            return 1
+        gu_names = facts["gu_names"]
+        assert isinstance(gu_names, dict)
+        population = int(str(facts["population"]))
+        report = render_report(
+            outcomes,
+            ReportContext(
+                measured_on=args.measured_on,
+                criteria_commit=args.criteria_commit,
+                seed=seed,
+                remeasure=args.remeasure,
+                population=population,
+                snapshots=str(facts["snapshots"]),
+                records_total=int(str(facts["records_total"])),
+                records_with_pnu=int(str(facts["records_with_pnu"])),
+                calls=args.calls,
+                stopped_runs=args.stopped_runs,
+                gu_names=gu_names,
+                commits=commits,
+            ),
+        )
+        args.out.write_text(report, encoding="utf-8")
+        print(f"리포트 {args.out.name} ({len(outcomes)}건)")
+        if args.save:
+            payload = summarize(
+                outcomes,
+                measured_on=date.fromisoformat(args.measured_on),
+                seed=seed,
+                remeasure=args.remeasure,
+                population=population,
+            )
+            await save(engine, payload)
+            print(f"search_match_result 저장 (seed {seed})")
     finally:
         await engine.dispose()
-    lines = detail_path(seed).read_text(encoding="utf-8").splitlines()
-    detail = [json.loads(line) for line in lines if line.strip()]
-    keys = [(row["license_type"], row["mgmt_no"]) for row in detail]
-    if keys != [(record.key.license_type, record.key.mgmt_no) for record in sample]:
-        print("건별 결과 파일의 기록이 표본과 다릅니다. 리포트를 만들지 않았습니다.")
-        return 1
-    outcomes = [
-        Outcome(record, row["outcome"], tuple(row["transport_reasons"]))
-        for record, row in zip(sample, detail, strict=True)
-    ]
-    gu_names = facts["gu_names"]
-    assert isinstance(gu_names, dict)
-    report = render_report(
-        outcomes,
-        ReportContext(
-            measured_on=args.measured_on,
-            criteria_commit=args.criteria_commit,
-            seed=seed,
-            remeasure=args.remeasure,
-            population=int(str(facts["population"])),
-            snapshots=str(facts["snapshots"]),
-            records_total=int(str(facts["records_total"])),
-            records_with_pnu=int(str(facts["records_with_pnu"])),
-            calls=args.calls,
-            stopped_runs=args.stopped_runs,
-            gu_names=gu_names,
-            commits=commits,
-        ),
-    )
-    args.out.write_text(report, encoding="utf-8")
-    print(f"리포트 {args.out.name} ({len(outcomes)}건)")
     return 0
 
 
@@ -106,6 +150,9 @@ def main(argv: list[str] | None = None) -> int:
         "--commit", action="append", default=[], help="구분=해시 (main에 있는 커밋, 여러 번)"
     )
     parser.add_argument("--size", type=int, default=SAMPLE_SIZE)
+    parser.add_argument(
+        "--save", action="store_true", help="집계 값을 search_match_result에 저장(방법론 페이지)"
+    )
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     return asyncio.run(run(parser.parse_args(argv)))
 

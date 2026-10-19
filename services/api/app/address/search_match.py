@@ -9,8 +9,11 @@ import hashlib
 import re
 from collections.abc import Awaitable, Callable, Iterable, Sequence
 from dataclasses import dataclass
+from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
+
+from pydantic import BaseModel, ConfigDict
 
 from app.address.juso import (
     CONNECTION_REASON,
@@ -465,3 +468,127 @@ def render_report(outcomes: Sequence[Outcome], ctx: ReportContext) -> str:
     lines += _group_table("개업연도", by_band, YEAR_BANDS)
     lines += _commit_table(ctx.commits)
     return "\n".join(lines) + "\n"
+
+
+# --- 방법론 페이지 데이터 (T-034, docs/30 `/stats/model-card`의 `search_match`) ----------------
+
+_RATE = Decimal("0.0001")  # 소수 4자리, `base_rate.rate`와 같다
+
+FailureType = Literal["keyword_error", "transport_error", "no_result", "jibun_changed", "other"]
+
+
+def _rate4(value: Decimal) -> Decimal:
+    return value.quantize(_RATE, rounding=ROUND_HALF_UP)
+
+
+class _Out(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class MatchRate(_Out):
+    matched: int
+    rate: Decimal
+    ci: tuple[Decimal, Decimal]  # Wilson 95%
+
+
+class RelatedOnly(_Out):
+    count: int
+    share: Decimal
+
+
+class FailureCount(_Out):
+    type: FailureType
+    count: int
+    share: Decimal
+
+
+class YearBandRate(_Out):
+    band: str
+    n: int
+    matched: int
+    rate: Decimal
+    ci: tuple[Decimal, Decimal]
+    reference_rate: Decimal
+
+
+class SearchMatchPayload(_Out):
+    """`search_match_result.payload`. 건별 결과(기록 키·주소)는 넣지 않는다."""
+
+    measured_on: date
+    seed: int
+    remeasure: bool
+    population: int
+    sample_size: int
+    judged: MatchRate  # 판정용: 대표 지번이 같거나 관련지번에 있다
+    reference: MatchRate  # 참고용: 대표 지번만
+    related_only: RelatedOnly
+    failures: list[FailureCount]
+    by_open_year: list[YearBandRate]
+
+
+def _match_rate(matched: int, total: int) -> MatchRate:
+    low, high = wilson_ci(matched, total)
+    return MatchRate(
+        matched=matched,
+        rate=_rate4(Decimal(matched) / total),
+        ci=(_rate4(low), _rate4(high)),
+    )
+
+
+def summarize(
+    outcomes: Sequence[Outcome],
+    *,
+    measured_on: date,
+    seed: int,
+    remeasure: bool,
+    population: int,
+) -> SearchMatchPayload:
+    """건별 결과 → 방법론 페이지가 보여줄 값. 리포트(`render_report`)와 같은 셈이다."""
+    total = len(outcomes)
+    if total == 0:
+        raise ValueError("건별 결과가 없습니다")
+    matched = sum(1 for row in outcomes if row.outcome in JUDGED_MATCH)
+    primary = sum(1 for row in outcomes if row.outcome == MATCH)
+    by_band: dict[str, list[Outcome]] = {}
+    for row in outcomes:
+        by_band.setdefault(year_band(row.record.opened_year), []).append(row)
+    bands = []
+    for band in YEAR_BANDS:
+        rows = by_band.get(band, [])
+        if not rows:
+            continue
+        band_matched = sum(1 for row in rows if row.outcome in JUDGED_MATCH)
+        band_primary = sum(1 for row in rows if row.outcome == MATCH)
+        rate = _match_rate(band_matched, len(rows))
+        bands.append(
+            YearBandRate(
+                band=band,
+                n=len(rows),
+                matched=band_matched,
+                rate=rate.rate,
+                ci=rate.ci,
+                reference_rate=_rate4(Decimal(band_primary) / len(rows)),
+            )
+        )
+    failures = []
+    for name in FAILURE_OUTCOMES:
+        count = sum(1 for row in outcomes if row.outcome == name)
+        failures.append(
+            FailureCount.model_validate(
+                {"type": name, "count": count, "share": _rate4(Decimal(count) / total)}
+            )
+        )
+    return SearchMatchPayload(
+        measured_on=measured_on,
+        seed=seed,
+        remeasure=remeasure,
+        population=population,
+        sample_size=total,
+        judged=_match_rate(matched, total),
+        reference=_match_rate(primary, total),
+        related_only=RelatedOnly(
+            count=matched - primary, share=_rate4(Decimal(matched - primary) / total)
+        ),
+        failures=failures,
+        by_open_year=bands,
+    )

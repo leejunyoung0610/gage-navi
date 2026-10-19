@@ -3,7 +3,8 @@
 import asyncio
 import dataclasses
 import hashlib
-from decimal import Decimal
+from datetime import date
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 import pytest
@@ -42,6 +43,7 @@ from app.address.search_match import (
     parse_rel_jibun,
     render_report,
     sample_rank,
+    summarize,
     verdict,
     year_band,
 )
@@ -503,3 +505,46 @@ def test_on_outcome_is_called_per_record() -> None:
         )
     )
     assert seen == [MATCH, NO_RESULT]
+
+
+def test_summarize_matches_report_counts() -> None:
+    """방법론 페이지 값(T-034)은 리포트와 같은 셈이다. 건별 결과는 가상 예시다."""
+    old = dataclasses.replace(RECORD, opened_year=1995)
+    results = [MATCH] * 6 + [MULTI_PARCEL, NO_RESULT, JIBUN_CHANGED, KEYWORD_ERROR]
+    outcomes = [Outcome(old if i < 4 else RECORD, name) for i, name in enumerate(results)]
+    payload = summarize(
+        outcomes, measured_on=date(2026, 10, 14), seed=SEED, remeasure=False, population=400_000
+    )
+    low, high = wilson_ci(7, 10)
+    assert payload.sample_size == 10 and payload.population == 400_000
+    assert payload.judged.matched == 7 and payload.judged.rate == Decimal("0.7000")
+    assert payload.judged.ci == (
+        low.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP),
+        high.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP),
+    )
+    assert payload.reference.matched == 6 and payload.reference.rate == Decimal("0.6000")
+    assert (payload.related_only.count, payload.related_only.share) == (1, Decimal("0.1000"))
+    assert [(f.type, f.count) for f in payload.failures] == [
+        (KEYWORD_ERROR, 1), (TRANSPORT_ERROR, 0), (NO_RESULT, 1), (JIBUN_CHANGED, 1), (OTHER, 0),
+    ]  # fmt: skip
+    # 표본이 없는 구간은 빠진다. 앞 4건(1995년 개업)은 모두 대표 지번 일치
+    assert [(b.band, b.n, b.matched) for b in payload.by_open_year] == [
+        ("1999년 이전", 4, 4),
+        (year_band(RECORD.opened_year), 6, 3),
+    ]
+    assert payload.by_open_year[1].reference_rate == Decimal("0.3333")
+
+
+def test_summarize_payload_has_no_record_keys_or_addresses() -> None:
+    outcomes = [Outcome(RECORD, MATCH), Outcome(RECORD, NO_RESULT)]
+    dumped = summarize(
+        outcomes, measured_on=date(2026, 10, 14), seed=SEED, remeasure=False, population=2
+    ).model_dump_json()
+    assert RECORD.key.mgmt_no not in dumped and RECORD.road_addr not in dumped
+    assert RECORD.pnu not in dumped and RECORD.jibun_addr not in dumped
+    assert '"rate":"0.5000"' in dumped  # 비율은 소수 4자리 문자열
+
+
+def test_summarize_requires_outcomes() -> None:
+    with pytest.raises(ValueError):
+        summarize([], measured_on=date(2026, 10, 14), seed=SEED, remeasure=False, population=0)
