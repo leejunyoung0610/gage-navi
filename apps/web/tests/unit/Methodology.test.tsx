@@ -244,6 +244,9 @@ describe("방법론 페이지 (docs/40 §4.9)", () => {
   it("한계·출처·갱신 주기의 숫자도 응답에서 만들어요", () => {
     render(<Methodology data={DATA} />);
     expect(section("한계").textContent).toContain("대상 20,000건 중 75.0%가 과거 폐업 4회 이상");
+    expect(section("한계").textContent).toContain(
+      "식품 업소(일반음식점·휴게음식점·제과점영업) 기록만 있어서, 그 사이에 미용실·학원·사무실 같은 다른 업종이 있던 기간은 이력에서 빈 기간으로 보여요. 빈 기간이 그 자리가 비어 있었다는 뜻은 아니에요.",
+    );
     expect(section("데이터 출처와 기준일").textContent).toContain(
       "통계 기준일은 2031년 4월 5일이에요(2031년 4월 데이터)",
     );
