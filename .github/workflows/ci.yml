@@ -1,8 +1,8 @@
 # docs/50-quality.md §8. 각 작업은 Makefile 타깃을 그대로 실행한다 (로컬 `make check`와 같은 검사).
-# e2e·e2e-full·mutation·security 작업은 해당 티켓에서 추가한다.
+# e2e-full·mutation·security 작업은 해당 티켓에서 추가한다.
 name: ci
 
-# main push에는 api-check·web-check만 돈다(README 배지가 main 상태를 보여 준다). 통합 테스트는 PR에서만.
+# main push에는 api-check·web-check·e2e가 돈다(README 배지가 main 상태를 보여 준다). 통합 테스트는 PR에서만.
 on:
   pull_request:
   push:
@@ -95,3 +95,42 @@ jobs:
       # check_copy는 T-037에서 추가
       - name: eslint · tsc · prettier · vitest · gen:api 차이 검사
         run: make check-web
+
+  # Playwright 전체(make e2e) — 프로덕션 빌드 + 가상 API(tests/e2e/mock-api.mjs). 외부 API는 부르지 않는다 (T-106)
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6 # 버전은 package.json의 packageManager를 따른다
+        with:
+          package_json_file: apps/web/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+      - name: 의존성 설치
+        run: pnpm install --frozen-lockfile
+        working-directory: apps/web
+      - name: Playwright 버전
+        id: playwright
+        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+        working-directory: apps/web
+      # 브라우저 파일만 캐시한다. 시스템 라이브러리는 캐시할 수 없어 매번 설치한다
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - name: Chromium 시스템 라이브러리
+        run: pnpm exec playwright install-deps chromium
+        working-directory: apps/web
+      - name: Playwright (빌드 + 가상 API)
+        run: make e2e
+      - name: 실패 시 trace 올리기
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-test-results
+          path: apps/web/test-results/
+          retention-days: 7
