@@ -1,0 +1,29 @@
+{
+  "_comment": "가상 예시 — 카카오 실제 응답이 아니다. 공식 개발 가이드(로컬 API › 좌표로 주소 변환하기)의 응답 형식으로 만들었다. 녹화 금지(AGENTS.md §3, data/README.md)",
+  "meta": { "total_count": 1 },
+  "documents": [
+    {
+      "road_address": {
+        "address_name": "가상시 가상구 가상로 12",
+        "region_1depth_name": "가상시",
+        "region_2depth_name": "가상구",
+        "region_3depth_name": "가상동",
+        "road_name": "가상로",
+        "underground_yn": "N",
+        "main_building_no": "12",
+        "sub_building_no": "",
+        "building_name": "가상빌딩",
+        "zone_no": "00000"
+      },
+      "address": {
+        "address_name": "가상시 가상구 가상동 47-1",
+        "region_1depth_name": "가상시",
+        "region_2depth_name": "가상구",
+        "region_3depth_name": "가상동",
+        "mountain_yn": "N",
+        "main_address_no": "47",
+        "sub_address_no": "1"
+      }
+    }
+  ]
+}

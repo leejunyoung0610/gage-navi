@@ -1,0 +1,18 @@
+{
+  "_comment": "가상 예시 — 카카오 실제 응답이 아니다. 공식 개발 가이드 형식, 도로명 주소가 없는 산 번지(\"도로명 주소는 좌표에 따라 반환되지 않을 수 있습니다\"). 녹화 금지(AGENTS.md §3)",
+  "meta": { "total_count": 1 },
+  "documents": [
+    {
+      "road_address": null,
+      "address": {
+        "address_name": "가상시 가상구 가상동 산 56",
+        "region_1depth_name": "가상시",
+        "region_2depth_name": "가상구",
+        "region_3depth_name": "가상동",
+        "mountain_yn": "Y",
+        "main_address_no": "56",
+        "sub_address_no": ""
+      }
+    }
+  ]
+}

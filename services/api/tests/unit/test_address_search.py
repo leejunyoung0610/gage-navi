@@ -276,3 +276,26 @@ def test_legal_dong_lookup_failure_is_503(juso: FakeJuso, monkeypatch: pytest.Mo
 
 
 PAGE_LOT = (RelatedLot("가상시 가상구 가상동", False, 4, 3),)
+
+
+def test_search_always_gives_related_pnus_list_and_road_addr(juso: FakeJuso) -> None:
+    """`AddressItem`의 `related_pnus`·`road_addr`는 null일 수 있지만, 그 경우는 좌표 결과뿐이다.
+
+    주소 검색은 관련지번이 없거나 읽지 못해도, 필지를 모르는 항목도 항상 목록·문자열을
+    준다(docs/30 §2).
+    """
+    juso.result = JusoPage(
+        items=(
+            JusoItem("가상로 12", "가상동 47-1", None, WITH_HISTORY, PAGE_LOT),
+            JusoItem("가상로 14", "가상동 48", None, WITHOUT_HISTORY),
+            JusoItem("가상로 16", "가상동", None, None),
+            JusoItem("가상로 18", "가상동 9", None, None, (RelatedLot("모르는동", False, 1, 0),)),
+        ),
+        page=1,
+        total=4,
+    )
+    items = client.get(URL, params={"q": QUERY}).json()["data"]["items"]
+    assert len(items) == 4
+    for item in items:
+        assert isinstance(item["related_pnus"], list)
+        assert isinstance(item["road_addr"], str)
