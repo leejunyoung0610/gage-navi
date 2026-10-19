@@ -8,7 +8,7 @@ paths:
 # 프론트엔드 규칙
 
 - Next.js 15 App Router, React 19, TypeScript strict. 화면 명세는 `docs/40-frontend.md`.
-- `/place/**`, `/methodology`는 서버 컴포넌트 + ISR(`revalidate = 86400`). 마법사·결과는 클라이언트 컴포넌트.
+- `/place/**`는 서버 컴포넌트 + ISR(`revalidate = 86400`). `/methodology`는 서버 컴포넌트, 요청 때 렌더하고 API 응답만 1일 캐시(빌드 때 API를 부르지 않는다, docs/40 §2). 마법사·결과는 클라이언트 컴포넌트.
 - API 타입은 `lib/api/types.ts`(openapi-typescript 생성물)만 사용. 응답 타입을 손으로 정의하지 않는다. API 변경 시 `pnpm gen:api`.
 - 서버 상태는 TanStack Query, 폼은 react-hook-form + zod.
 - 사업장 프로필은 `lib/profile-store.ts`로만 읽고 쓴다(키 `gn.profile.v1`). `localStorage` 접근은 모두 try/catch, 실패해도 화면은 동작해야 한다.

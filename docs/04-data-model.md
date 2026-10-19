@@ -162,6 +162,17 @@ CREATE TABLE model_card (
   UNIQUE (snapshot_label, method_version)
 );
 
+-- 검색 일치율 측정 결과 (방법론 페이지 데이터, T-034. 마이그레이션 0008_search_match)
+-- `jobs.render_search_match --save`가 건별 결과 파일(docs/50 §7)을 집계해 seed마다 1행을 쓴다(API 호출 없음).
+-- 화면은 `id`가 가장 큰 행을 쓴다(docs/30 `/stats/model-card`). 건별 결과(기록 키·주소)는 저장하지 않는다
+CREATE TABLE search_match_result (
+  id          BIGSERIAL PRIMARY KEY,
+  seed        INT NOT NULL UNIQUE,      -- 20261013(첫 측정) 또는 20261014(재측정)
+  measured_on DATE NOT NULL,
+  payload     JSONB NOT NULL,           -- docs/30 `/stats/model-card`의 `search_match` 형식
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- 정정·삭제 요청 (연락처 필드 없음. 자유 입력 `message`에 연락처가 들어올 수 있어 로그에 남기지 않고,
 -- 처리(`resolved_at`) 후 1년이 지나면 `message`를 빈 문자열로 지운다 — 행·처리 결과는 처리 기록으로 남긴다, docs/60 §3·§5)
 CREATE TABLE correction_request (
