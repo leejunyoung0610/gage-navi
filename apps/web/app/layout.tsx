@@ -3,18 +3,17 @@ import type { ReactNode } from "react";
 
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
+import { pageRobots } from "@/lib/indexing";
 
 import { Providers } from "./providers";
 
 import "./globals.css";
 
-// INDEXING_ENABLED가 "true"가 아니면 모든 페이지 noindex (docs/40 §9)
-const indexingEnabled = process.env.INDEXING_ENABLED === "true";
-
 export const metadata: Metadata = {
   title: { default: "가게내비", template: "%s | 가게내비" },
   applicationName: "가게내비",
-  robots: indexingEnabled ? undefined : { index: false, follow: false },
+  // 기본은 noindex. 색인 허용 범위(홈·방법론·기록 2건 이상 층)는 각 페이지가 덮어쓴다 (docs/40 §9)
+  robots: pageRobots(false),
   icons: { apple: "/icons/apple-touch-icon.png" },
   appleWebApp: { capable: true, title: "가게내비", statusBarStyle: "default" },
 };

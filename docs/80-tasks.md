@@ -326,6 +326,9 @@
 - **참고**: docs/40 §4.9, docs/10 §7.3
 
 ### T-035 검색 노출 기반 ⏱1h
+- **할 일** (2026-10-19 사용자 결정)
+  - 색인은 `INDEXING_ENABLED=true`이고 `SITE_URL`이 있을 때만 켠다(기본값 없음, 운영 도메인은 T-081). 켜졌을 때 색인 허용은 기록 2건 이상 층·홈·방법론, 나머지는 noindex(docs/40 §9)
+  - 사이트맵 데이터는 공개 API `GET /sitemap/sigungu`, `GET /sitemap/sigungu/{code}`(docs/30). 기록 수는 숨김을 반영한 `floor_summary.record_count`
 - **수용 기준**
   - [ ] `INDEXING_ENABLED`가 `true`가 아니면 모든 페이지 `noindex`, robots 차단
   - [ ] `true`면 기록 2건 이상 층 페이지만 sitemap 포함(시군구 분할)
@@ -595,6 +598,7 @@
   - [ ] Vercel + VM(Compose, Caddy HTTPS), cron 배치(docs/03 §5 중 그 시점에 있는 잡) 동작
   - [ ] DB 백업(특히 정정 요청·숨김 기록·피드백), 백업에서 복원 1회 실제 수행 기록. **Gate 1 시점 범위는 DB**다 — `storage/`와 정책자금 cron은 아직 없다. 생긴 뒤의 백업 대상 확대와 복원 재확인은 docs/50 §7 Gate 2 항목
 - **할 일**
+  - (2026-10-19 추가, T-035) 운영 도메인을 정해 웹의 `SITE_URL`(빌드 인자와 실행 환경 모두)에 넣는다. 비어 있으면 Gate 1 뒤 `INDEXING_ENABLED=true`로 바꿔도 색인·사이트맵이 꺼진 채로 있다(docs/40 §9)
   - (2026-10-19 추가) 운영 DB에 마이그레이션 0008을 적용한 뒤 `jobs.render_search_match --save`를 1회 실행한다. 안 하면 방법론 페이지의 검색 정확도가 '아직 계산하지 않았어요'로 나온다(T-034)
 - **참고**: docs/01 §5
 

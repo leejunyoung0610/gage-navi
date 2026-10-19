@@ -123,6 +123,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sitemap/sigungu": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Sigungu */
+        get: operations["get_sigungu_api_v1_sitemap_sigungu_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sitemap/sigungu/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Sigungu Floors */
+        get: operations["get_sigungu_floors_api_v1_sitemap_sigungu__code__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/login": {
         parameters: {
             query?: never;
@@ -976,6 +1010,28 @@ export interface components {
             /** Criterion B */
             criterion_b: boolean;
         };
+        /** SigunguFloors */
+        SigunguFloors: {
+            /** Code */
+            code: string;
+            /** Floors */
+            floors: components["schemas"]["SitemapFloor"][];
+        };
+        /** SigunguFloorsResponse */
+        SigunguFloorsResponse: {
+            data: components["schemas"]["SigunguFloors"];
+            meta: components["schemas"]["SitemapMeta"];
+        };
+        /** SigunguList */
+        SigunguList: {
+            /** Sigungu */
+            sigungu: components["schemas"]["SitemapSigungu"][];
+        };
+        /** SigunguListResponse */
+        SigunguListResponse: {
+            data: components["schemas"]["SigunguList"];
+            meta: components["schemas"]["SitemapMeta"];
+        };
         /** SigunguOut */
         SigunguOut: {
             /** Sigungu */
@@ -989,6 +1045,25 @@ export interface components {
                 number,
                 number
             ] | null;
+        };
+        /** SitemapFloor */
+        SitemapFloor: {
+            /** Pnu */
+            pnu: string;
+            /** Floor */
+            floor: string;
+        };
+        /** SitemapMeta */
+        SitemapMeta: {
+            /** Request Id */
+            request_id: string;
+        };
+        /** SitemapSigungu */
+        SitemapSigungu: {
+            /** Code */
+            code: string;
+            /** Floor Count */
+            floor_count: number;
         };
         /** StatsMeta */
         StatsMeta: {
@@ -1384,6 +1459,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelCardResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_sigungu_api_v1_sitemap_sigungu_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SigunguListResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_sigungu_floors_api_v1_sitemap_sigungu__code__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SigunguFloorsResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Service Unavailable */

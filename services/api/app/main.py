@@ -12,6 +12,7 @@ from app.core.health import router as health_router
 from app.core.logging import configure_logging
 from app.location.corrections.router import router as corrections_router
 from app.location.places.router import router as places_router
+from app.location.sitemap.router import router as sitemap_router
 from app.location.stats.router import router as stats_router
 
 configure_logging()
@@ -29,4 +30,5 @@ app.include_router(address_router, prefix="/api/v1")
 app.include_router(places_router, prefix="/api/v1")
 app.include_router(corrections_router, prefix="/api/v1")
 app.include_router(stats_router, prefix="/api/v1")
+app.include_router(sitemap_router, prefix="/api/v1")
 app.include_router(admin_router, prefix="/admin/v1")

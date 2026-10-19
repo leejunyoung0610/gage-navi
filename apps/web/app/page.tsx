@@ -1,4 +1,10 @@
+import type { Metadata } from "next";
+
 import { HomeAddressSearch } from "@/components/HomeAddressSearch";
+import { pageRobots } from "@/lib/indexing";
+
+// 홈은 색인 허용 범위 (docs/40 §9). 정적 페이지라 빌드 때 정해진다
+export const metadata: Metadata = { robots: pageRobots(true) };
 
 export default function HomePage() {
   return (

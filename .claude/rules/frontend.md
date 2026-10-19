@@ -17,5 +17,5 @@ paths:
 - 모바일 360px 기준으로 먼저 구현, 터치 영역 44px, 포커스 표시, 폼 라벨 필수.
 - 브라우저 `alert`/`confirm`/`prompt` 금지 — 앱 내 모달·시트 사용.
 - 지도 SDK는 지연 로딩. 층 페이지 JS 예산 170KB(gzip, 지도 제외).
-- `INDEXING_ENABLED`가 `true`가 아니면 모든 페이지 `noindex`.
+- `INDEXING_ENABLED`가 `true`가 아니거나 `SITE_URL`이 없으면 모든 페이지 `noindex`·robots 전체 차단. 켜졌을 때 색인 허용은 기록 2건 이상 층·홈·방법론뿐(docs/40 §9, `lib/indexing.ts`).
 - 분석 이벤트에 프로필 값·주소·금액을 넣지 않는다.

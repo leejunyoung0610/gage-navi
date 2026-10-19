@@ -2,11 +2,13 @@ import type { Metadata } from "next";
 import { connection } from "next/server";
 
 import { Methodology } from "@/components/Methodology";
+import { pageRobots } from "@/lib/indexing";
 import { fetchModelCard } from "@/lib/methodology";
 
 export const metadata: Metadata = {
   title: "데이터와 계산 방법",
   description: "가게내비가 쓰는 데이터, 정의, 통계 결과와 한계예요.",
+  robots: pageRobots(true), // 색인 허용 범위 (docs/40 §9)
 };
 
 /**

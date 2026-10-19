@@ -174,8 +174,14 @@
 
 ## 9. 검색 노출 (SEO)
 
-- **Gate 1 전에는 전체 `noindex`.** Gate 1(정정 요청 처리 체계 포함) 통과 후 기록 2건 이상인 층 페이지만 색인 허용
-- `sitemap.ts`: 시군구별 분할 사이트맵(파일당 URL 5만 개 이하)
+- **Gate 1 전에는 전체 `noindex`.** Gate 1(정정 요청 처리 체계 포함) 통과 후 아래 범위만 색인 허용
+- **색인 켜짐 조건** (T-035, 2026-10-19 사용자 결정): 웹 환경 변수 `INDEXING_ENABLED`가 `"true"`이고 `SITE_URL`(사이트 절대 주소, 예 `https://…`)이 있을 때만. `SITE_URL`은 기본값이 없고 운영 도메인은 T-081에서 정한다 — 코드·문서에 실제 도메인을 적지 않는다. 둘 중 하나라도 없으면:
+  - 모든 페이지 `noindex`(`<meta name="robots" content="noindex, nofollow">`)
+  - `robots.txt`는 전체 차단(`Disallow: /`), 사이트맵은 만들지 않는다(`/sitemap.xml`·`/sitemaps/*` 404)
+- **켜졌을 때 색인 허용 범위** (T-035, 2026-10-19 사용자 결정): (a) 기록 2건 이상인 층 페이지(`summary.record_count ≥ 2` — 숨김 기록을 뺀 `floor_summary.record_count`), (b) 홈, (c) 방법론. 홈·방법론에는 개별 업소 데이터가 없다. 그 밖의 페이지(필지 페이지, 기록 1건인 층, 정정 요청, `/privacy` 등)는 `noindex`
+  - `robots.txt`: `Allow: /`, `Disallow: /api/`, `Sitemap: {SITE_URL}/sitemap.xml`. 크롤러가 각 페이지의 `noindex`를 읽을 수 있게 페이지는 막지 않는다
+- **사이트맵** (T-035): `/sitemap.xml`은 사이트맵 색인, `/sitemaps/{시군구 코드}-{n}.xml`은 그 시군구(PNU 앞 5자리)의 층 페이지 목록이다. 한 파일에 URL 50,000개 이하로 나누고 `n`은 1부터. 요청 때 API(docs/30 `GET /sitemap/sigungu`, `GET /sitemap/sigungu/{code}`)를 읽는다 — 빌드 때 API를 부르지 않는다(Docker 빌드에는 API가 없다). 층 페이지만 넣는다(홈·방법론은 넣지 않는다)
+- 정적 페이지(홈)의 `noindex`는 빌드 때 정해지므로 `INDEXING_ENABLED`·`SITE_URL`은 빌드 인자와 실행 환경에 같은 값을 준다(`apps/web/Dockerfile`, `docker-compose.yml`)
 - 구조화 데이터는 사용하지 않음(평가 정보로 오해될 소지)
 
 ## 10. 분석 이벤트 (개인정보 없음, 자체 호스팅 도구)
