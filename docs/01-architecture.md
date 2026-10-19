@@ -117,7 +117,7 @@ gage-navi/
 │   │   ├── profile/page.tsx
 │   │   ├── methodology/page.tsx
 │   │   ├── admin/(protected)/...
-│   │   ├── manifest.ts, sitemap.ts, robots.ts
+│   │   ├── manifest.ts, robots.ts, sitemap.xml/route.ts, sitemaps/[file]/route.ts
 │   ├── components/                # docs/40 §5 컴포넌트 목록
 │   ├── lib/                       # api-client(생성 타입), profile-store, format(ko)
 │   └── tests/e2e/

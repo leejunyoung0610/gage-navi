@@ -38,6 +38,7 @@ services:
       args:
         NEXT_PUBLIC_API_BASE_URL: http://localhost:8000   # 브라우저용 값은 빌드할 때 번들에 들어간다
         INDEXING_ENABLED: ${INDEXING_ENABLED:-false}      # 정적 페이지의 noindex도 빌드 때 정해진다
+        SITE_URL: ${SITE_URL:-}                           # 사이트 절대 주소. 기본값 없음, 운영 도메인은 T-081
     env_file: .env
     environment:
       API_INTERNAL_URL: http://api:8000         # 서버 컴포넌트(SSR/ISR)의 API 호출용

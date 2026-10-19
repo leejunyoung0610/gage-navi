@@ -23,6 +23,7 @@ from app.core import db
 from app.core.ratelimit import correction_limiter, lookup_limiter
 from app.location.history.job import build_history
 from app.location.places import queries
+from app.location.sitemap import router as sitemap_router
 from app.main import app
 from jobs.correction_maintenance import maintain
 
@@ -399,6 +400,29 @@ def test_suppress_hides_record_and_rebuilds_parcel(
     assert fetch(seeded, "SELECT record_id, reason, request_id FROM record_suppression") == [
         (3, "wrong_info", correction_id)
     ]
+
+
+def test_suppress_drops_floor_from_sitemap_below_two_records(
+    client: TestClient, seeded: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 사이트맵은 숨김을 반영한 `floor_summary.record_count ≥ 2`인 층만 (docs/40 §9, T-035)
+    engine = create_async_engine(seeded, poolclass=NullPool)
+    monkeypatch.setattr(sitemap_router, "get_engine", lambda: engine)
+
+    def floors() -> list[dict[str, str]]:
+        response = client.get("/api/v1/sitemap/sigungu/11215")
+        assert response.status_code == 200, response.text
+        result: list[dict[str, str]] = response.json()["data"]["floors"]
+        return result
+
+    assert floors() == [{"pnu": P1, "floor": "1"}]  # 1층 3건. 2층·P2는 1건
+    assert login(client).status_code == 200
+    assert resolve(client, submit(client, 3, floor="1")).status_code == 200
+    assert floors() == [{"pnu": P1, "floor": "1"}]  # 2건 남음
+    assert resolve(client, submit(client, 2, floor="1")).status_code == 200
+    assert floors() == []  # 숨긴 기록 2건을 빼면 1건
+    sigungu = client.get("/api/v1/sitemap/sigungu").json()["data"]["sigungu"]
+    assert sigungu == []
 
 
 def test_revalidate_called_after_commit_with_two_paths_and_secret(

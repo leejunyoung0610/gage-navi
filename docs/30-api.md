@@ -217,6 +217,23 @@
   - 건별 결과(기록 키·주소)는 내보내지 않는다
 - `Cache-Control: public, max-age=300`. DB 오류는 503 `SERVICE_UNAVAILABLE`
 
+### `GET /api/v1/sitemap/sigungu`
+웹 사이트맵 색인(docs/40 §9) 데이터. 사이트맵에 넣을 층 페이지 — `floor_summary.record_count ≥ 2`인 층 — 이 있는 시군구(PNU 앞 5자리)와 층 수(T-035, 2026-10-19 사용자 결정)
+```json
+{"data": {"sigungu": [{"code": "11215", "floor_count": 1234}]}, "meta": {"request_id": "01J…"}}
+```
+- `floor_summary.record_count`는 숨김 기록을 뺀 값이다(숨김 처리 때 그 필지의 요약을 다시 만든다, docs/10 §7.1). 그래서 숨긴 기록 때문에 2건이 되는 층은 들어가지 않는다
+- `code` 오름차순. 층 페이지가 하나도 없는 시군구는 빠진다
+
+### `GET /api/v1/sitemap/sigungu/{code}`
+그 시군구의 사이트맵 층 페이지 목록. 조건은 위와 같다
+```json
+{"data": {"code": "11215", "floors": [{"pnu": "1121510700100470001", "floor": "1"}]}, "meta": {"request_id": "01J…"}}
+```
+- `code`: 숫자 5자리(아니면 422 `details.fields.code = "invalid_format"`). 해당 층이 없으면 빈 목록
+- `pnu`, `floor` 문자열(바이트) 오름차순
+- 두 API 모두 호출 제한은 조회와 같고(120회/분), `Cache-Control: public, max-age=300`. DB 오류는 503 `SERVICE_UNAVAILABLE`
+
 ### `GET /api/v1/programs?module=funding|closure`
 ```json
 {"data": {"items": [{

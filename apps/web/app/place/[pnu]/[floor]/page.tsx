@@ -7,6 +7,7 @@ import { CorrectionButton, CorrectionProvider } from "@/components/CorrectionShe
 import { FloorTimeline } from "@/components/FloorTimeline";
 import { PlaceNotices } from "@/components/PlaceNotices";
 import { daysToMonths, formatCount, formatFloor, formatMonths } from "@/lib/format";
+import { isIndexableFloor, pageRobots } from "@/lib/indexing";
 import { fetchFloor, type FloorData } from "@/lib/place";
 
 // ISR 1일 (docs/40 §2)
@@ -31,6 +32,8 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   return {
     title: `${where} 가게 이력`,
     description: `${where}에 신고된 식품 업소 인허가 기록과 참고 통계예요.`,
+    // 기록(숨김 제외) 2건 이상인 층만 색인 허용 (docs/40 §9)
+    robots: pageRobots(isIndexableFloor(result.data.summary.record_count)),
   };
 }
 

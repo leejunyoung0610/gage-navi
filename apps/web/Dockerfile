@@ -9,8 +9,9 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 # 브라우저용 값은 빌드할 때 번들에 들어간다 (lib/api-base.ts)
 ARG NEXT_PUBLIC_API_BASE_URL
-# 정적 페이지(홈 등)의 noindex는 빌드 때 정해진다. 비우면 noindex (docs/40 §9)
+# 정적 페이지(홈 등)의 noindex는 빌드 때 정해진다. 둘 중 하나라도 비우면 noindex (docs/40 §9)
 ARG INDEXING_ENABLED
+ARG SITE_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
 
