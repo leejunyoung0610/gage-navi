@@ -76,7 +76,33 @@
 - `meta`에는 `request_id`만 있다(`data_as_of` 없음 — 이 응답의 주소는 도로명주소 API의 현재 값이다)
 
 ### `GET /api/v1/address/reverse?lat={위도}&lng={경도}`
-현재 위치 → 같은 형식 1건(카카오 좌표→주소 변환). T-032에서 구현, 실패 시 `UPSTREAM_UNAVAILABLE`.
+좌표 → 그 지점의 필지와 주소 (T-032). "현재 위치로 찾기"와 "지도에서 고르기"(docs/40 §4.2)가 같이 쓴다.
+```json
+{"data": {
+  "pnu": "1121510700100010000",
+  "items": [{
+    "road_addr": "서울특별시 광진구 능동로 120",
+    "jibun_addr": "서울특별시 광진구 화양동 1",
+    "building_name": "○○빌딩",
+    "pnu": "1121510700100010000",
+    "has_history": true,
+    "related_pnus": ["1121510700100040001"]
+  }]
+}, "meta": {"request_id": "01J…"}}
+```
+항목은 주소 검색과 같은 `AddressItem`이다.
+
+1. 카카오 `coord2regioncode`의 `region_type` `B`(법정동) 문서의 `code`(10자리)와, `coord2address`의 지번 주소 `mountain_yn`(산 여부)·`main_address_no`(본번)·`sub_address_no`(부번, 빈 문자열이면 0)로 PNU를 만든다(docs/10 §2.1과 같은 19자리). 이름으로 법정동을 찾지 않는다
+2. 그 주소(도로명 주소가 있으면 도로명, 없으면 지번 주소 문자열)로 도로명주소 검색(§2 `address/search`와 같은 호출, 첫 페이지)을 한 번 더 부르고, **결과 중 `pnu`가 1의 PNU와 같은 항목만** 남긴다. "어느 것을 고를지" 규칙은 두지 않는다. 남은 항목의 `related_pnus`·`has_history`는 주소 검색과 같은 방법으로 만든다
+3. 같은 항목이 여럿이면(한 필지에 건물 여러 개) 모두 돌려주고 사용자가 고른다
+4. 같은 항목이 없거나 도로명주소 검색이 실패하면 카카오 응답으로 1건을 만든다: `road_addr`는 카카오 도로명 주소(없으면 `null` — "도로명 주소는 좌표에 따라 반환되지 않을 수 있습니다"), `jibun_addr`는 카카오 지번 주소, `building_name`은 카카오 건물명(없으면 `null`), **`related_pnus`는 `null`**(같은 건물의 다른 필지를 확인하지 못함 — 빈 목록 `[]`은 "확인했고 없음"이라 쓰지 않는다, ADR-003)
+5. 법정동코드나 지번을 얻지 못하면(도로·하천·바다 등) `pnu`가 `null`이고 `items`는 빈 목록이다(UNKNOWN). 추측해서 채우지 않는다
+
+- `AddressItem`의 `road_addr`와 `related_pnus`는 `null`일 수 있다(2026-10-19). **주소 검색(`address/search`)은 둘 다 항상 값을 준다** — `null`은 이 API의 4번 경우에만 나온다
+- 오류: `lat`·`lng`가 없거나 숫자가 아니거나 범위(위도 −90~90, 경도 −180~180) 밖이면 422 `VALIDATION_ERROR`(`details.fields`), 호출 제한 429(조회 API 한도를 같이 쓴다), 카카오 실패·REST 키 없음 502 `UPSTREAM_UNAVAILABLE`, `parcel`·`legal_dong` 조회 실패 503
+- **캐시하지 않는다.** 카카오 응답(가공한 값 포함)은 요청을 처리하는 동안 한 번만 쓰고 저장·캐시·로그하지 않는다(`data/README.md` "카카오 지도·로컬 API 이용 조건"). 2번의 도로명주소 검색도 이 경로에서는 캐시를 읽지도 쓰지도 않는다(검색어가 카카오 응답에서 나온다)
+- **좌표는 로그에 남기지 않는다**(ADR-014). 접속 로그는 쿼리스트링을 지운 경로만 쓰고, 로그에는 실패 종류만 쓴다
+- `meta`에는 `request_id`만 있다
 
 ### `GET /api/v1/places/{pnu}`
 ```json

@@ -62,7 +62,7 @@
 
 ### D5. 지도
 
-Kakao Maps JavaScript SDK (JS 키, 도메인 등록). 현재 위치 → 주소 변환은 Kakao Local API `coord2address`(REST 키, 서버 프록시). 🔎 T-032
+Kakao Maps JavaScript SDK (JS 키, 도메인 등록). 좌표 → 필지는 Kakao Local API `coord2regioncode`(법정동코드)·`coord2address`(산 여부·본번·부번)를 서버 프록시로 부른다(REST 키, docs/30 §2 `address/reverse`, T-032). 결과는 저장·캐시하지 않는다. 이용 조건·쿼터는 `data/README.md` "카카오 지도·로컬 API 이용 조건"
 
 ### D6. 소상공인시장진흥공단 상가(상권)정보 ⛔
 영업 중 상가 분기 스냅샷(업종, 주소, 좌표). 인허가가 없는 업종 보완·층/호 교차검증용으로 Phase 2 이후 검토.
