@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 
+import { Providers } from "./providers";
+
 import "./globals.css";
 
 // INDEXING_ENABLED가 "true"가 아니면 모든 페이지 noindex (docs/40 §9)
@@ -28,7 +30,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="ko">
       <body className="text-ink flex min-h-dvh flex-col bg-white font-sans antialiased">
         <SiteHeader />
-        <div className="flex-1">{children}</div>
+        <div className="flex-1">
+          <Providers>{children}</Providers>
+        </div>
         <SiteFooter />
       </body>
     </html>
