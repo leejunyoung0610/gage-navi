@@ -64,6 +64,41 @@ export function formatRateCi(ci: readonly [string, string]): string {
   return `(95% 신뢰구간 ${formatRateRange(ci)})`;
 }
 
+/**
+ * 모형 카드의 부동소수 비율(Kaplan–Meier 추정 등) `0.5237` → `52.4%`. 소수 4자리 문자열로 바꾼 뒤
+ * `formatRate`와 같은 규칙으로 반올림한다
+ */
+export function formatFloatRate(rate: number): string {
+  return formatRate(floatToDecimal(rate));
+}
+
+/** `[0.51, 0.53]` → `51.0~53.0%` */
+export function formatFloatRateRange([lo, hi]: readonly [number, number]): string {
+  return formatRateRange([floatToDecimal(lo), floatToDecimal(hi)]);
+}
+
+function floatToDecimal(rate: number): string {
+  if (!Number.isFinite(rate) || rate < 0) throw new RangeError(`비율이 아니에요: ${rate}`);
+  return rate.toFixed(4);
+}
+
+/** 오즈비·AUC 같은 통계량 `1.100948` → `1.101` (소수 셋째 자리) */
+export function formatStat(value: number): string {
+  if (!Number.isFinite(value)) throw new RangeError(`숫자가 아니에요: ${value}`);
+  return value.toFixed(3);
+}
+
+/** 통계량 구간 `[1.084, 1.118]` → `1.084~1.118` */
+export function formatStatRange([lo, hi]: readonly [number, number]): string {
+  return `${formatStat(lo)}~${formatStat(hi)}`;
+}
+
+/** p값 `2.9e-34` → `0.001 미만`, `0.0213` → `0.021` */
+export function formatPValue(p: number): string {
+  if (!Number.isFinite(p) || p < 0 || p > 1) throw new RangeError(`p값이 아니에요: ${p}`);
+  return p < 0.001 ? "0.001 미만" : p.toFixed(3);
+}
+
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 function parseDate(value: string): { year: number; month: number; day: number } {

@@ -4,13 +4,18 @@ import {
   daysToMonths,
   formatCount,
   formatDate,
+  formatFloatRate,
+  formatFloatRateRange,
   formatFloor,
   formatMonths,
   formatPeriod,
+  formatPValue,
   formatRate,
   formatRateCi,
   formatRateRange,
   formatSnapshotLabel,
+  formatStat,
+  formatStatRange,
   formatWon,
   formatYearMonth,
   monthsBetween,
@@ -154,5 +159,26 @@ describe("층 이력 화면 형식", () => {
     expect(daysToMonths(812)).toBe(26);
     expect(daysToMonths(30)).toBe(0);
     expect(() => daysToMonths(-1)).toThrow(RangeError);
+  });
+});
+
+describe("방법론 통계 형식 (T-034)", () => {
+  it("부동소수 비율은 소수 4자리로 바꾼 뒤 같은 규칙으로 반올림", () => {
+    expect(formatFloatRate(0.52374)).toBe("52.4%");
+    expect(formatFloatRate(0.29801)).toBe("29.8%");
+    expect(formatFloatRateRange([0.5105, 0.5361])).toBe("51.1~53.6%");
+    expect(() => formatFloatRate(Number.NaN)).toThrow(RangeError);
+  });
+
+  it("오즈비·AUC는 소수 셋째 자리", () => {
+    expect(formatStat(1.100948850204379)).toBe("1.101");
+    expect(formatStat(0.6191904071122495)).toBe("0.619");
+    expect(formatStatRange([1.0840761705455744, 1.1180841380881439])).toBe("1.084~1.118");
+  });
+
+  it("p값은 0.001 미만이면 그렇게 쓴다", () => {
+    expect(formatPValue(2.92e-34)).toBe("0.001 미만");
+    expect(formatPValue(0.0213)).toBe("0.021");
+    expect(() => formatPValue(2)).toThrow(RangeError);
   });
 });
