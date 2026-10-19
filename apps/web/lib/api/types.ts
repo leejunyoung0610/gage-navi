@@ -192,6 +192,8 @@ export interface components {
             has_history: boolean | null;
             /** Related Pnus */
             related_pnus: string[] | null;
+            /** Related With History */
+            related_with_history: components["schemas"]["RelatedParcel"][] | null;
         };
         /** AddressReverseData */
         AddressReverseData: {
@@ -530,6 +532,13 @@ export interface components {
         PlaceResponse: {
             data: components["schemas"]["PlaceData"];
             meta: components["schemas"]["app__location__places__router__Meta"];
+        };
+        /** RelatedParcel */
+        RelatedParcel: {
+            /** Pnu */
+            pnu: string;
+            /** Jibun Label */
+            jibun_label: string;
         };
         /** ResolveData */
         ResolveData: {

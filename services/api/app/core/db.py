@@ -51,16 +51,20 @@ async def location_snapshot_label() -> str | None:
     return None if earliest is None else earliest.astimezone(DISPLAY_TZ).strftime("%Y-%m")
 
 
-async def existing_parcels(pnus: list[str]) -> set[str]:
-    """`pnus` 중 `parcel` 테이블에 있는 것 (주소 검색 `has_history`, docs/30 §2)."""
+async def parcel_labels(pnus: list[str]) -> dict[str, str]:
+    """`pnus` 중 `parcel` 테이블에 있는 것 → `jibun_label`.
+
+    주소 검색 `has_history`·`related_with_history`(docs/30 §2)가 쓴다.
+    """
     if not pnus:
-        return set()
+        return {}
     async with asyncio.timeout(PING_TIMEOUT_SECONDS):
         async with get_engine().connect() as conn:
             rows = await conn.execute(
-                text("SELECT pnu FROM parcel WHERE pnu = ANY(:pnus)"), {"pnus": pnus}
+                text("SELECT pnu, jibun_label FROM parcel WHERE pnu = ANY(:pnus)"),
+                {"pnus": pnus},
             )
-            return {str(row[0]) for row in rows}
+            return {str(pnu): str(label) for pnu, label in rows}
 
 
 async def legal_dong_rows(names: list[str]) -> list[tuple[str, str, bool]]:

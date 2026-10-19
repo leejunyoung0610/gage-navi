@@ -25,6 +25,12 @@ URL = "/api/v1/address/search"
 QUERY = "가상로 12"
 WITH_HISTORY = "1121510700100470001"
 WITHOUT_HISTORY = "1121510700100480000"
+RELATED_WITH_HISTORY = "1121510800200120000"  # 다른동 산 12
+# 가상 예시: parcel에 있는 필지 → jibun_label
+LABELS = {
+    WITH_HISTORY: "가상시 가상구 가상동 47-1",
+    RELATED_WITH_HISTORY: "가상시 가상구 다른동 산 12",
+}
 PAGE = JusoPage(
     items=(
         JusoItem("가상시 가상구 가상로 12", "가상시 가상구 가상동 47-1", "가상빌딩", WITH_HISTORY),
@@ -59,13 +65,13 @@ class FakeJuso:
 def juso(monkeypatch: pytest.MonkeyPatch) -> Iterator[FakeJuso]:
     fake = FakeJuso()
 
-    async def existing(pnus: list[str]) -> set[str]:
-        return {WITH_HISTORY} & set(pnus)
+    async def existing(pnus: list[str]) -> dict[str, str]:
+        return {pnu: LABELS[pnu] for pnu in pnus if pnu in LABELS}
 
     async def dong_rows(names: list[str]) -> list[tuple[str, str, bool]]:
         return [row for row in DONG_ROWS if row[1] in names]
 
-    monkeypatch.setattr(db, "existing_parcels", existing)
+    monkeypatch.setattr(db, "parcel_labels", existing)
     monkeypatch.setattr(db, "legal_dong_rows", dong_rows)
     app.dependency_overrides[address_router.get_juso_client] = lambda: fake
     address_router.search_cache.clear()
@@ -89,6 +95,7 @@ def test_search_returns_items_with_history_flag(juso: FakeJuso) -> None:
                 "pnu": WITH_HISTORY,
                 "has_history": True,
                 "related_pnus": [],
+                "related_with_history": [],
             },
             {
                 "road_addr": "가상시 가상구 가상로 14",
@@ -97,6 +104,7 @@ def test_search_returns_items_with_history_flag(juso: FakeJuso) -> None:
                 "pnu": WITHOUT_HISTORY,
                 "has_history": False,
                 "related_pnus": [],
+                "related_with_history": [],
             },
             {
                 "road_addr": "가상시 가상구 가상로 16",
@@ -105,6 +113,7 @@ def test_search_returns_items_with_history_flag(juso: FakeJuso) -> None:
                 "pnu": None,
                 "has_history": None,  # 필지를 모르면 이력 여부도 모른다
                 "related_pnus": [],
+                "related_with_history": [],
             },
         ],
         "page": 1,
@@ -125,10 +134,10 @@ def test_same_query_hits_upstream_once(juso: FakeJuso) -> None:
 def test_has_history_is_not_cached(juso: FakeJuso, monkeypatch: pytest.MonkeyPatch) -> None:
     client.get(URL, params={"q": QUERY})
 
-    async def none_exist(pnus: list[str]) -> set[str]:
-        return set()
+    async def none_exist(pnus: list[str]) -> dict[str, str]:
+        return {}
 
-    monkeypatch.setattr(db, "existing_parcels", none_exist)
+    monkeypatch.setattr(db, "parcel_labels", none_exist)
     items = client.get(URL, params={"q": QUERY}).json()["data"]["items"]
     assert [item["has_history"] for item in items] == [False, False, None]
 
@@ -168,10 +177,10 @@ def test_upstream_failure_is_502_and_not_cached(juso: FakeJuso) -> None:
 
 
 def test_parcel_lookup_failure_is_503(juso: FakeJuso, monkeypatch: pytest.MonkeyPatch) -> None:
-    async def broken(pnus: list[str]) -> set[str]:
+    async def broken(pnus: list[str]) -> dict[str, str]:
         raise ConnectionRefusedError("refused")
 
-    monkeypatch.setattr(db, "existing_parcels", broken)
+    monkeypatch.setattr(db, "parcel_labels", broken)
     response = client.get(URL, params={"q": QUERY})
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "SERVICE_UNAVAILABLE"
@@ -210,10 +219,10 @@ def test_search_keyword_is_not_logged(
     with caplog.at_level(logging.DEBUG):
         client.get(URL, params={"q": f"{marker} 가상로 12"})
 
-        async def broken(pnus: list[str]) -> set[str]:
+        async def broken(pnus: list[str]) -> dict[str, str]:
             raise RuntimeError("boom")
 
-        monkeypatch.setattr(db, "existing_parcels", broken)
+        monkeypatch.setattr(db, "parcel_labels", broken)
         client.get(URL, params={"q": f"{marker} 가상로 14"})
     # `httpx2` 로거의 기록은 테스트 클라이언트가 찍은 자기 요청 URL이라 뺀다(서버 로그가 아니다).
     # 서버가 도로명주소 API로 보내는 요청 URL에 검색어가 없다는 것은 test_juso.py가 본다.
@@ -258,6 +267,11 @@ def test_related_lots_become_pnus(juso: FakeJuso) -> None:
         "1121510900100010000",
     ]
     assert items[1]["pnu"] is None and items[1]["related_pnus"] == ["1121510700100040003"]
+    # 관련지번 중 기록이 있는 필지만, 같은 순서로 (docs/30 §2, T-033)
+    assert items[0]["related_with_history"] == [
+        {"pnu": RELATED_WITH_HISTORY, "jibun_label": "가상시 가상구 다른동 산 12"}
+    ]
+    assert items[1]["related_with_history"] == []
 
 
 def test_legal_dong_lookup_failure_is_503(juso: FakeJuso, monkeypatch: pytest.MonkeyPatch) -> None:

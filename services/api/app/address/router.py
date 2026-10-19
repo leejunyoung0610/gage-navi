@@ -48,6 +48,11 @@ DB_MESSAGE = "서비스에 일시적인 문제가 있어요. 잠시 후 다시 �
 search_cache = SearchCache()
 
 
+class RelatedParcel(BaseModel):
+    pnu: str
+    jibun_label: str
+
+
 class AddressItem(BaseModel):
     # 주소 검색은 항상 값이 있다. 좌표 결과에서 카카오가 도로명 주소를 주지 않으면 null
     road_addr: str | None
@@ -60,6 +65,8 @@ class AddressItem(BaseModel):
     # 주소 검색은 항상 목록이다. null은 좌표 결과에서 확인하지 못한 경우뿐
     # — []("확인했고 없음")과 다르다
     related_pnus: list[str] | None
+    # related_pnus 중 기록이 있는(`parcel`에 있는) 필지, 같은 순서. related_pnus가 null이면 null
+    related_with_history: list[RelatedParcel] | None
 
 
 class AddressSearchData(BaseModel):
@@ -134,22 +141,27 @@ def _db_error(where: str, exc: Exception) -> ApiError:
     return ApiError(ErrorCode.SERVICE_UNAVAILABLE, DB_MESSAGE)
 
 
-async def _lookups(pnus: list[str], items: list[JusoItem]) -> tuple[set[str], LegalDongIndex]:
-    """`has_history`용 `parcel` 존재 여부와 관련지번용 법정동 조회 표."""
+async def _lookups(pnus: list[str], items: list[JusoItem]) -> tuple[dict[str, str], LegalDongIndex]:
+    """관련지번용 법정동 조회 표와, 대표·관련지번 필지 중 `parcel`에 있는 것의 `jibun_label`."""
     dong_names = sorted({lot.dong_name for item in items for lot in item.related_lots})
-    with_history = await db.existing_parcels(sorted(set(pnus)))
     index = LegalDongIndex.from_rows(await db.legal_dong_rows(dong_names))
-    return with_history, index
+    related = [pnu for item in items for pnu in _related_pnus(item, index)]
+    labels = await db.parcel_labels(sorted(set(pnus) | set(related)))
+    return labels, index
 
 
-def _item(item: JusoItem, with_history: set[str], index: LegalDongIndex) -> AddressItem:
+def _item(item: JusoItem, labels: dict[str, str], index: LegalDongIndex) -> AddressItem:
+    related = _related_pnus(item, index)
     return AddressItem(
         road_addr=item.road_addr,
         jibun_addr=item.jibun_addr,
         building_name=item.building_name,
         pnu=item.pnu,
-        has_history=None if item.pnu is None else item.pnu in with_history,
-        related_pnus=_related_pnus(item, index),
+        has_history=None if item.pnu is None else item.pnu in labels,
+        related_pnus=related,
+        related_with_history=[
+            RelatedParcel(pnu=pnu, jibun_label=labels[pnu]) for pnu in related if pnu in labels
+        ],
     )
 
 
@@ -196,10 +208,10 @@ async def search_address(
 
     pnus = [item.pnu for item in result.items if item.pnu is not None]
     try:
-        with_history, index = await _lookups(pnus, list(result.items))
+        labels, index = await _lookups(pnus, list(result.items))
     except Exception as exc:
         raise _db_error("address search", exc) from None
-    items = [_item(item, with_history, index) for item in result.items]
+    items = [_item(item, labels, index) for item in result.items]
     return AddressSearchResponse(
         data=AddressSearchData(items=items, page=result.page, total=result.total),
         meta=Meta(request_id=current_request_id()),
@@ -251,11 +263,11 @@ async def reverse_address(
 
     matched = await _same_parcel(juso, spot, pnu)
     try:
-        with_history, index = await _lookups([pnu], matched)
+        labels, index = await _lookups([pnu], matched)
     except Exception as exc:
         raise _db_error("address reverse", exc) from None
     if matched:
-        items = [_item(item, with_history, index) for item in matched]
+        items = [_item(item, labels, index) for item in matched]
     else:
         items = [
             AddressItem(
@@ -263,8 +275,10 @@ async def reverse_address(
                 jibun_addr=spot.jibun_addr,
                 building_name=spot.building_name,
                 pnu=pnu,
-                has_history=pnu in with_history,
-                related_pnus=None,  # 같은 건물의 다른 필지를 확인하지 못했다 ([]과 다르다)
+                has_history=pnu in labels,
+                # 같은 건물의 다른 필지를 확인하지 못했다 ([]과 다르다)
+                related_pnus=None,
+                related_with_history=None,
             )
         ]
     return AddressReverseResponse(data=AddressReverseData(pnu=pnu, items=items), meta=meta)

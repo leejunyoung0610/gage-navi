@@ -31,6 +31,11 @@ LAT, LNG = 37.123456, 127.654321  # 가상 예시 좌표
 POINT = {"lat": str(LAT), "lng": str(LNG)}
 CODE = "1121510700"  # 가상 예시 법정동코드
 PNU = "1121510700100470001"  # CODE + 일반 + 47-1
+# 가상 예시: parcel에 있는 필지 → jibun_label
+LABELS = {
+    PNU: "가상시 가상구 가상동 47-1",
+    "1121510800200120000": "가상시 가상구 다른동 산 12",
+}
 OTHER_PNU = "1121510700100480000"
 
 SPOT = KakaoSpot(
@@ -85,13 +90,13 @@ def page(*items: JusoItem) -> JusoPage:
 def kakao(monkeypatch: pytest.MonkeyPatch) -> Iterator[FakeKakao]:
     fake = FakeKakao()
 
-    async def existing(pnus: list[str]) -> set[str]:
-        return {PNU} & set(pnus)
+    async def existing(pnus: list[str]) -> dict[str, str]:
+        return {pnu: LABELS[pnu] for pnu in pnus if pnu in LABELS}
 
     async def dong_rows(names: list[str]) -> list[tuple[str, str, bool]]:
         return [row for row in DONG_ROWS if row[1] in names]
 
-    monkeypatch.setattr(db, "existing_parcels", existing)
+    monkeypatch.setattr(db, "parcel_labels", existing)
     monkeypatch.setattr(db, "legal_dong_rows", dong_rows)
     app.dependency_overrides[address_router.get_kakao_client] = lambda: fake
     use_juso(page(SAME, OTHER))
@@ -125,6 +130,9 @@ def test_same_parcel_keeps_only_matching_pnu_with_related_pnus(kakao: FakeKakao)
                 "pnu": PNU,
                 "has_history": True,
                 "related_pnus": ["1121510700100040003", "1121510800200120000"],
+                "related_with_history": [
+                    {"pnu": "1121510800200120000", "jibun_label": "가상시 가상구 다른동 산 12"}
+                ],
             }
         ],
     }
@@ -167,6 +175,7 @@ def test_no_matching_search_result_gives_kakao_item_with_unknown_related(
                 "pnu": PNU,
                 "has_history": True,
                 "related_pnus": None,  # 확인 못 함 — 빈 목록이 아니다
+                "related_with_history": None,
             }
         ],
     }
@@ -179,7 +188,7 @@ def test_no_road_address_searches_by_jibun_and_keeps_road_null(kakao: FakeKakao)
     assert juso is not None and juso.calls == [("가상 가상구 가상동 산 56", 1)]
     assert item["road_addr"] is None and item["building_name"] is None
     assert item["pnu"] == "1121510700200560000" and item["has_history"] is False
-    assert item["related_pnus"] is None
+    assert item["related_pnus"] is None and item["related_with_history"] is None
 
 
 @pytest.mark.parametrize(
@@ -263,10 +272,10 @@ def test_missing_kakao_key_is_502(kakao: FakeKakao, monkeypatch: pytest.MonkeyPa
 
 
 def test_parcel_lookup_failure_is_503(kakao: FakeKakao, monkeypatch: pytest.MonkeyPatch) -> None:
-    async def broken(pnus: list[str]) -> set[str]:
+    async def broken(pnus: list[str]) -> dict[str, str]:
         raise ConnectionRefusedError("refused")
 
-    monkeypatch.setattr(db, "existing_parcels", broken)
+    monkeypatch.setattr(db, "parcel_labels", broken)
     response = client.get(URL, params=POINT)
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "SERVICE_UNAVAILABLE"
@@ -308,10 +317,10 @@ def test_coordinates_and_kakao_values_are_not_logged(
     with caplog.at_level(logging.DEBUG):
         client.get(URL, params={"lat": "37.987654", "lng": "126.876543"})
 
-        async def broken(pnus: list[str]) -> set[str]:
+        async def broken(pnus: list[str]) -> dict[str, str]:
             raise RuntimeError("boom")
 
-        monkeypatch.setattr(db, "existing_parcels", broken)
+        monkeypatch.setattr(db, "parcel_labels", broken)
         client.get(URL, params={"lat": "37.987654", "lng": "126.876543"})
     # `httpx2` 로거의 기록은 테스트 클라이언트가 찍은 자기 요청 URL이라 뺀다(서버 로그가 아니다)
     logged = "\n".join(
