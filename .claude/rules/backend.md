@@ -17,4 +17,4 @@ paths:
 - 응답 형식은 `docs/30-api.md` §1 공통 응답. 오류 코드는 표에 있는 것만.
 - 로깅: 구조화 JSON. 요청 본문 로그 금지. `funding`/`closure` 라우터에 본문 로깅 미들웨어가 붙지 않았는지 테스트(`test_no_body_logging`).
 - 배치 작업은 `jobs/` CLI(`python -m jobs.<name>`), 멱등(같은 입력 재실행 시 같은 결과), 실행 결과를 `data_snapshot`/리포트에 기록.
-- 테스트 위치: `tests/{unit,property,scenario,golden,integration}`. 외부 API는 녹화 픽스처(`tests/fixtures/http/`).
+- 테스트 위치: `tests/{unit,property,scenario,golden,integration}`. 외부 API는 녹화 픽스처(`tests/fixtures/http/`). 예외: 카카오는 녹화하지 않고 공식 가이드 형식의 가상 픽스처("가상 예시" 표시)를 쓴다(AGENTS.md §3).

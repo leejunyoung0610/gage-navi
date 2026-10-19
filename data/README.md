@@ -71,6 +71,42 @@
 - 호출 전에 검색어에서 위 예약어(낱말 단위)와 특수문자를 지운다(`clean_keyword`)
 - 테스트·CI는 API를 호출하지 않는다. 실제 응답은 `python -m jobs.record_juso_fixtures`로 녹화하고(호출 7번, 1초 간격), 녹화 파일에는 검색어·페이지·응답만 쓴다
 
+## 카카오 지도·로컬 API 이용 조건 (T-032, 2026-10-19 기록)
+
+**근거 — 공식 문서** (조항 번호·문구·쿼터 값은 사용자가 공식 문서에서 확인해 알려 줌, 2026-10-19)
+
+1. Kakao Developers 운영정책(2026-04-20 시행) 제5조 20호(캐시), 30호(복사·복제)
+2. 카카오맵 API FAQ — `https://devtalk.kakao.com/t/faq-api/125610`: 로컬 API 결과는 "실시간으로 호출하여 사용하는 것만 가능"
+3. Kakao Developers 쿼터 문서 — `https://developers.kakao.com/docs/latest/ko/getting-started/quota`
+
+**참고 — 카카오 담당자의 DevTalk 답변** (공식 문서가 아니다. 2026-10-15에 열어 봄)
+
+- `https://devtalk.kakao.com/t/local-api/151263` (2026-08-20): "로컬API를 결과값은 어떠한 형태로든 저장하여 사용할 수 없고 … 실시간 호출로만 이용할 수 있습니다." 응답을 가공한 데이터도 기기·서버에 저장해 쓸 수 없다고 답했다
+- `https://devtalk.kakao.com/t/api/151497` (2026-09-04): 지오코딩 좌표에 대해 "위경도 좌표 데이터의 저장 및 활용은 허용하지 않으며 … 실시간 호출로만 이용해 주셔야 합니다."
+
+**쿼터** (공식 쿼터 문서, 확인일 2026-10-19)
+
+| 항목 | 무료 쿼터 |
+|---|---|
+| 카카오맵 Web(JavaScript) SDK | 일 300,000건 |
+| 좌표 → 주소 변환(`coord2address`) | 일 100,000건 |
+| 좌표 → 행정구역 변환(`coord2regioncode`) | 일 100,000건 |
+| 전체 API | 월 3,000,000건 |
+
+- 카카오맵 API 무료 쿼터는 개발자 계정에서 **처음 활성화한 앱에만** 준다. 이 서비스는 무료 쿼터가 있는 기존 앱을 같이 쓴다(사용자 확인, 2026-10-19). 같은 앱의 다른 서비스와 쿼터를 나눠 쓴다
+- `/address/reverse` 한 번에 카카오 호출 2번(`coord2regioncode`, `coord2address`)과 도로명주소 검색 1번이 든다
+
+**지금 쓰는 키** (값은 `.env`에만 있다)
+
+- REST 키 `KAKAO_REST_API_KEY`(서버, `/address/reverse`), JavaScript 키 `NEXT_PUBLIC_KAKAO_JS_KEY`(웹 지도 SDK, 브라우저 번들에 들어간다 — 도메인 등록으로 막는다). JS SDK 도메인에 `http://localhost:3000`을 등록했다(사용자, 2026-10-19). 운영 도메인 등록은 T-081
+
+**이 조건 때문에 코드가 하는 일**
+
+- `/address/reverse`는 카카오 응답을 요청을 처리하는 동안 한 번만 쓰고 **저장·캐시·로그하지 않는다**(가공한 값 — 만든 PNU, 주소 문자열 — 포함). 이 경로에서는 카카오 응답에서 나온 검색어로 부르는 도로명주소 검색도 캐시하지 않는다
+- 화면은 결과를 그 자리에서 보여 주기만 하고 기기에 저장하지 않는다(`profile-store`에 넣지 않는다)
+- **카카오 실제 응답을 녹화한 픽스처는 저장소에 넣지 않는다**(AGENTS.md §3 예외). 테스트는 공식 개발 가이드(`https://developers.kakao.com/docs/latest/ko/local/dev-guide`)의 응답 형식으로 만든 가상 픽스처를 쓰고, 파일과 값에 "가상 예시"를 표시한다
+- 테스트·CI는 카카오를 호출하지 않는다
+
 ## 영업상태·업태 원문 값 (T-016, 2026-10 세 파일 전체 행)
 
 `jobs.normalize_licenses`가 `data_snapshot.validation.normalize`의 `status_counts`·`category_counts`에 적은 값이다. 서울 밖 주소 행(25건)도 들어 있다.
