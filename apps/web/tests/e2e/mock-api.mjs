@@ -246,6 +246,18 @@ function send(res, status, body) {
 createServer((req, res) => {
   const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
   const path = url.pathname;
+  // 정정 요청(T-036): 브라우저가 JSON 본문으로 바로 보내므로 사전 요청(OPTIONS)에 답한다 (docs/30 §1 CORS)
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST",
+      "Access-Control-Allow-Headers": "Content-Type",
+    });
+    return res.end();
+  }
+  if (req.method === "POST" && path === `/api/v1/places/${PNU}/corrections`) {
+    return send(res, 201, { data: { id: 55 }, meta: { request_id: META.request_id } });
+  }
   if (path === "/api/v1/health") {
     return send(res, 200, {
       status: "ok",
