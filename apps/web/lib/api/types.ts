@@ -106,6 +106,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/stats/model-card": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Model Card */
+        get: operations["get_model_card_api_v1_stats_model_card_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/login": {
         parameters: {
             query?: never;
@@ -263,12 +280,68 @@ export interface components {
             /** N */
             n: number;
         };
+        /** BucketOut */
+        BucketOut: {
+            /**
+             * Bucket
+             * @enum {string}
+             */
+            bucket: "0" | "1" | "2" | "3" | "4+";
+            /** N */
+            n: number;
+            /** Events */
+            events: number;
+            /** Rate */
+            rate: string;
+            /** Ci */
+            ci: [
+                string,
+                string
+            ];
+        };
         /** BulkClosureDetail */
         BulkClosureDetail: {
             /** Jurisdiction Label */
             jurisdiction_label: string | null;
             /** Closure Count */
             closure_count: number;
+        };
+        /** BulkExclusionOut */
+        BulkExclusionOut: {
+            none: components["schemas"]["SettingResult"];
+            surge_rule: components["schemas"]["SettingResult"];
+            w0_citywide_100: components["schemas"]["SettingResult"];
+        };
+        /** CensoredBucketOut */
+        CensoredBucketOut: {
+            /**
+             * Bucket
+             * @enum {string}
+             */
+            bucket: "0" | "1" | "2" | "3" | "4+";
+            /** N */
+            n: number;
+            /** Censored */
+            censored: number;
+            /** Rate */
+            rate: number;
+            /** Ci */
+            ci: [
+                number,
+                number
+            ];
+        };
+        /** CensoredOut */
+        CensoredOut: {
+            /** N */
+            n: number;
+            /** Buckets */
+            buckets: components["schemas"]["CensoredBucketOut"][];
+        };
+        /** ConvenienceStoreOut */
+        ConvenienceStoreOut: {
+            excluded: components["schemas"]["SettingResult"];
+            included: components["schemas"]["SettingResult"];
         };
         /** CorrectionCreated */
         CorrectionCreated: {
@@ -333,6 +406,32 @@ export interface components {
             /** Request Id */
             request_id: string;
         };
+        /** DataOut */
+        DataOut: {
+            /** Snapshot Label */
+            snapshot_label: string;
+            /** License Group */
+            license_group: string;
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /**
+             * Cohort From
+             * Format: date
+             */
+            cohort_from: string;
+            /**
+             * Cohort To
+             * Format: date
+             */
+            cohort_to: string;
+            /** N */
+            n: number;
+            /** Event Rate */
+            event_rate: string;
+        };
         /** ErrorBody */
         ErrorBody: {
             code: components["schemas"]["ErrorCode"];
@@ -357,6 +456,38 @@ export interface components {
         ErrorResponse: {
             error: components["schemas"]["ErrorBody"];
             meta: components["schemas"]["ErrorMeta"];
+        };
+        /** ExcludeStaleOut */
+        ExcludeStaleOut: {
+            none: components["schemas"]["SettingResult"];
+            same_ho: components["schemas"]["SettingResult"];
+            same_ho_or_area: components["schemas"]["SettingResult"];
+        };
+        /** FailureCount */
+        FailureCount: {
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "keyword_error" | "transport_error" | "no_result" | "jibun_changed" | "other";
+            /** Count */
+            count: number;
+            /** Share */
+            share: string;
+        };
+        /** FailureOut */
+        FailureOut: {
+            /** Axis */
+            axis: string;
+            /** Value */
+            value: string;
+            /**
+             * Criterion
+             * @enum {string}
+             */
+            criterion: "a" | "b";
+            /** Detail */
+            detail: string;
         };
         /** FloorCountItem */
         FloorCountItem: {
@@ -415,10 +546,24 @@ export interface components {
             /** Stale Suspect */
             stale_suspect: boolean;
         };
+        /**
+         * FloorRecordCountOut
+         * @description 기본 설정 `4+` 버킷을 층의 기록 수로 나눈 값 (기록이 많은 층의 비중).
+         */
+        FloorRecordCountOut: {
+            /** Four Plus */
+            four_plus: components["schemas"]["RecordCountOut"][];
+        };
         /** FloorResponse */
         FloorResponse: {
             data: components["schemas"]["FloorData"];
             meta: components["schemas"]["app__location__places__router__Meta"];
+        };
+        /** FloorScaleOut */
+        FloorScaleOut: {
+            single: components["schemas"]["ScaleResult"];
+            small: components["schemas"]["ScaleResult"];
+            large: components["schemas"]["ScaleResult"];
         };
         /** FloorSummary */
         FloorSummary: {
@@ -434,6 +579,11 @@ export interface components {
             has_concurrent: boolean;
             /** Max Concurrent */
             max_concurrent: number;
+        };
+        /** FloorUnknownOut */
+        FloorUnknownOut: {
+            all: components["schemas"]["SettingResult"];
+            exclude_parcels_with_floorless_closure: components["schemas"]["SettingResult"];
         };
         /** HealthResponse */
         HealthResponse: {
@@ -458,6 +608,15 @@ export interface components {
             ho: string;
             /** Record Ids */
             record_ids: number[];
+        };
+        /**
+         * LicenseTypeOut
+         * @description 인허가 종류별 결과. 판정에 넣지 않는다 (docs/10 §7.3).
+         */
+        LicenseTypeOut: {
+            general_restaurant: components["schemas"]["SettingResult"];
+            rest_restaurant: components["schemas"]["SettingResult"];
+            bakery: components["schemas"]["SettingResult"];
         };
         /** Location */
         Location: {
@@ -487,6 +646,119 @@ export interface components {
         LoginResponse: {
             data: components["schemas"]["LoginData"];
             meta: components["schemas"]["app__admin__router__Meta"];
+        };
+        /** LogitOut */
+        LogitOut: {
+            /** N */
+            n: number;
+            /** Or Per Prior */
+            or_per_prior: number;
+            /** Ci */
+            ci: [
+                number,
+                number
+            ];
+            /** P */
+            p: number;
+        };
+        /** MainLogitOut */
+        MainLogitOut: {
+            /** N */
+            n: number;
+            /** Or Per Prior */
+            or_per_prior: number;
+            /** Ci */
+            ci: [
+                number,
+                number
+            ];
+            /** P */
+            p: number;
+            /** Spec */
+            spec: string;
+            /** Se */
+            se: string;
+            with_other_floor_control: components["schemas"]["OtherFloorOut"] | null;
+        };
+        /** MatchRate */
+        MatchRate: {
+            /** Matched */
+            matched: number;
+            /** Rate */
+            rate: string;
+            /** Ci */
+            ci: [
+                string,
+                string
+            ];
+        };
+        /** ModelCardData */
+        ModelCardData: {
+            /** Method Version */
+            method_version: string | null;
+            model_card: components["schemas"]["ModelCardPayload"] | null;
+            search_match: components["schemas"]["SearchMatchPayload"] | null;
+        };
+        /**
+         * ModelCardPayload
+         * @description `model_card.payload`. W0 재현 모드에는 설정·민감도·판정이 없다.
+         */
+        ModelCardPayload: {
+            data: components["schemas"]["DataOut"];
+            default_setting: components["schemas"]["SettingOut"] | null;
+            /** Base Rates */
+            base_rates: components["schemas"]["BucketOut"][];
+            logit: components["schemas"]["MainLogitOut"] | null;
+            /** By Sigungu */
+            by_sigungu: components["schemas"]["SigunguOut"][];
+            out_of_time: components["schemas"]["OutOfTimeOut"] | null;
+            sensitivity: components["schemas"]["SensitivityOut"] | null;
+            robustness: components["schemas"]["RobustnessOut"] | null;
+            by_floor_scale: components["schemas"]["FloorScaleOut"] | null;
+            by_floor_scale_full_history: components["schemas"]["FloorScaleOut"] | null;
+            floor_record_count: components["schemas"]["FloorRecordCountOut"] | null;
+            single_with_open_neighbor: components["schemas"]["OpenNeighborOut"] | null;
+        };
+        /** ModelCardResponse */
+        ModelCardResponse: {
+            data: components["schemas"]["ModelCardData"];
+            meta: components["schemas"]["StatsMeta"];
+        };
+        /**
+         * OpenNeighborOut
+         * @description 단독으로 분류됐지만 개업일에 다른 점포가 영업 중이던 기록. 사후 참고 — 판정은 그대로다.
+         */
+        OpenNeighborOut: {
+            /** Single N */
+            single_n: number;
+            /** With Open Neighbor N */
+            with_open_neighbor_n: number;
+            /** Share */
+            share: string;
+            without_open_neighbor: components["schemas"]["SettingResult"];
+        };
+        /** OtherFloorOut */
+        OtherFloorOut: {
+            /** Or Per Prior */
+            or_per_prior: number;
+            /** Ci */
+            ci: [
+                number,
+                number
+            ];
+            /** Or Other Floor */
+            or_other_floor: number;
+        };
+        /** OutOfTimeOut */
+        OutOfTimeOut: {
+            /** Train */
+            train: string;
+            /** Test */
+            test: string;
+            /** Auc Base */
+            auc_base: number;
+            /** Auc With Prior */
+            auc_with_prior: number;
         };
         /** PlaceData */
         PlaceData: {
@@ -533,6 +805,24 @@ export interface components {
             data: components["schemas"]["PlaceData"];
             meta: components["schemas"]["app__location__places__router__Meta"];
         };
+        /** RecordCountOut */
+        RecordCountOut: {
+            /** Range */
+            range: string;
+            /** N */
+            n: number;
+            /** Events */
+            events: number;
+            /** Rate */
+            rate: string;
+        };
+        /** RelatedOnly */
+        RelatedOnly: {
+            /** Count */
+            count: number;
+            /** Share */
+            share: string;
+        };
         /** RelatedParcel */
         RelatedParcel: {
             /** Pnu */
@@ -567,6 +857,32 @@ export interface components {
             data: components["schemas"]["ResolveData"];
             meta: components["schemas"]["app__admin__router__Meta"];
         };
+        /** RobustnessOut */
+        RobustnessOut: {
+            /** Holds */
+            holds: boolean;
+            /** Failures */
+            failures: components["schemas"]["FailureOut"][];
+        };
+        /**
+         * ScaleResult
+         * @description 층 규모 하나의 결과와 판정. `holds`가 거짓이면 그 규모의 기준율을 화면에 쓰지 않는다.
+         */
+        ScaleResult: {
+            /** N */
+            n: number;
+            /** Event Rate */
+            event_rate: string;
+            /** Buckets */
+            buckets: components["schemas"]["BucketOut"][];
+            logit: components["schemas"]["LogitOut"] | null;
+            /** Criterion A */
+            criterion_a: boolean;
+            /** Criterion B */
+            criterion_b: boolean;
+            /** Holds */
+            holds: boolean;
+        };
         /** ScopedRate */
         ScopedRate: {
             /** Scope Code */
@@ -582,6 +898,120 @@ export interface components {
             ];
             /** N */
             n: number;
+        };
+        /**
+         * SearchMatchPayload
+         * @description `search_match_result.payload`. 건별 결과(기록 키·주소)는 넣지 않는다.
+         */
+        SearchMatchPayload: {
+            /**
+             * Measured On
+             * Format: date
+             */
+            measured_on: string;
+            /** Seed */
+            seed: number;
+            /** Remeasure */
+            remeasure: boolean;
+            /** Population */
+            population: number;
+            /** Sample Size */
+            sample_size: number;
+            judged: components["schemas"]["MatchRate"];
+            reference: components["schemas"]["MatchRate"];
+            related_only: components["schemas"]["RelatedOnly"];
+            /** Failures */
+            failures: components["schemas"]["FailureCount"][];
+            /** By Open Year */
+            by_open_year: components["schemas"]["YearBandRate"][];
+        };
+        /** SensitivityOut */
+        SensitivityOut: {
+            bulk_exclusion: components["schemas"]["BulkExclusionOut"];
+            convenience_store: components["schemas"]["ConvenienceStoreOut"];
+            exclude_stale: components["schemas"]["ExcludeStaleOut"];
+            floor_unknown: components["schemas"]["FloorUnknownOut"];
+            bulk_as_censored: components["schemas"]["CensoredOut"];
+            license_type: components["schemas"]["LicenseTypeOut"];
+        };
+        /** SettingOut */
+        SettingOut: {
+            /**
+             * Bulk Exclusion
+             * @enum {string}
+             */
+            bulk_exclusion: "none" | "surge_rule" | "w0_citywide_100";
+            /**
+             * Convenience Store
+             * @enum {string}
+             */
+            convenience_store: "excluded" | "included";
+            /**
+             * Exclude Stale
+             * @enum {string}
+             */
+            exclude_stale: "none" | "same_ho" | "same_ho_or_area";
+            /**
+             * Floor Unknown
+             * @enum {string}
+             */
+            floor_unknown: "all" | "exclude_parcels_with_floorless_closure";
+        };
+        /**
+         * SettingResult
+         * @description 설정 하나의 결과와 판정 (a)(b).
+         */
+        SettingResult: {
+            /** Is Default */
+            is_default: boolean;
+            /** N */
+            n: number;
+            /** Event Rate */
+            event_rate: string;
+            /** Buckets */
+            buckets: components["schemas"]["BucketOut"][];
+            logit: components["schemas"]["LogitOut"] | null;
+            /** Criterion A */
+            criterion_a: boolean;
+            /** Criterion B */
+            criterion_b: boolean;
+        };
+        /** SigunguOut */
+        SigunguOut: {
+            /** Sigungu */
+            sigungu: string;
+            /** N */
+            n: number;
+            /** Or */
+            or: number | null;
+            /** Ci */
+            ci: [
+                number,
+                number
+            ] | null;
+        };
+        /** StatsMeta */
+        StatsMeta: {
+            /** Request Id */
+            request_id: string;
+        };
+        /** YearBandRate */
+        YearBandRate: {
+            /** Band */
+            band: string;
+            /** N */
+            n: number;
+            /** Matched */
+            matched: number;
+            /** Rate */
+            rate: string;
+            /** Ci */
+            ci: [
+                string,
+                string
+            ];
+            /** Reference Rate */
+            reference_rate: string;
         };
         /** Meta */
         app__address__router__Meta: {
@@ -925,6 +1355,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_model_card_api_v1_stats_model_card_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelCardResponse"];
                 };
             };
             /** @description Service Unavailable */

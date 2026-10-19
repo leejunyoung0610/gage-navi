@@ -123,6 +123,118 @@ const floorData = (floor) => ({
   data_as_of: META.data_as_of,
 });
 
+// 방법론 페이지(T-034). 긴 표가 화면 폭을 넘기지 않는지 보려고 모든 항목을 채웠다 — 가상 예시
+const bucketRows = () =>
+  ["0", "1", "2", "3", "4+"].map((bucket, i) => ({
+    bucket,
+    n: 10000 + i,
+    events: 3000 + i,
+    rate: `0.${30 + i * 5}00`,
+    ci: [`0.${29 + i * 5}00`, `0.${31 + i * 5}00`],
+  }));
+const settingResult = (ok = true) => ({
+  is_default: false,
+  n: 123456,
+  event_rate: "0.3500",
+  buckets: bucketRows(),
+  logit: { n: 120000, or_per_prior: 1.1, ci: [1.05, 1.15], p: 1e-10 },
+  criterion_a: true,
+  criterion_b: ok,
+});
+const scaleResult = (ok) => ({ ...settingResult(ok), holds: ok });
+const modelCard = {
+  data: {
+    snapshot_label: "2026-11",
+    license_group: "food3",
+    as_of: "2026-11-01",
+    cohort_from: "2005-01-01",
+    cohort_to: "2023-11-02",
+    n: 123456,
+    event_rate: "0.3500",
+  },
+  default_setting: {
+    bulk_exclusion: "surge_rule",
+    convenience_store: "excluded",
+    exclude_stale: "none",
+    floor_unknown: "all",
+  },
+  base_rates: bucketRows(),
+  logit: {
+    n: 120000,
+    or_per_prior: 1.1,
+    ci: [1.05, 1.15],
+    p: 1e-10,
+    spec: "가상",
+    se: "가상",
+    with_other_floor_control: { or_per_prior: 1.12, ci: [1.1, 1.14], or_other_floor: 0.99 },
+  },
+  by_sigungu: Array.from({ length: 25 }, (_, i) => ({
+    sigungu: `가상${i}구`,
+    n: 5000 + i,
+    or: i === 24 ? null : 0.95 + i * 0.01,
+    ci: i === 24 ? null : [0.9 + i * 0.01, 1.0 + i * 0.01],
+  })),
+  out_of_time: { train: "2005-2014", test: "2015-2020", auc_base: 0.6, auc_with_prior: 0.605 },
+  sensitivity: {
+    bulk_exclusion: {
+      none: settingResult(),
+      surge_rule: { ...settingResult(), is_default: true },
+      w0_citywide_100: settingResult(),
+    },
+    convenience_store: { excluded: settingResult(), included: settingResult() },
+    exclude_stale: {
+      none: settingResult(),
+      same_ho: settingResult(),
+      same_ho_or_area: settingResult(),
+    },
+    floor_unknown: {
+      all: settingResult(),
+      exclude_parcels_with_floorless_closure: settingResult(),
+    },
+    bulk_as_censored: {
+      n: 123456,
+      buckets: bucketRows().map((b) => ({ ...b, censored: 10, rate: 0.3, ci: [0.29, 0.31] })),
+    },
+    license_type: {
+      general_restaurant: settingResult(),
+      rest_restaurant: settingResult(),
+      bakery: settingResult(),
+    },
+  },
+  robustness: { holds: true, failures: [] },
+  by_floor_scale: {
+    single: scaleResult(true),
+    small: scaleResult(true),
+    large: scaleResult(false),
+  },
+  by_floor_scale_full_history: null,
+  floor_record_count: null,
+  single_with_open_neighbor: null,
+};
+const searchMatch = {
+  measured_on: "2026-11-02",
+  seed: 1,
+  remeasure: false,
+  population: 400000,
+  sample_size: 2000,
+  judged: { matched: 1900, rate: "0.9500", ci: ["0.9400", "0.9600"] },
+  reference: { matched: 1880, rate: "0.9400", ci: ["0.9300", "0.9500"] },
+  related_only: { count: 20, share: "0.0100" },
+  failures: ["keyword_error", "transport_error", "no_result", "jibun_changed", "other"].map(
+    (type) => ({ type, count: 20, share: "0.0100" }),
+  ),
+  by_open_year: ["1999년 이전", "2000~2009", "2010~2015", "2016~2020", "2021년 이후"].map(
+    (band) => ({
+      band,
+      n: 400,
+      matched: 380,
+      rate: "0.9500",
+      ci: ["0.9300", "0.9700"],
+      reference_rate: "0.9400",
+    }),
+  ),
+};
+
 function send(res, status, body) {
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
@@ -164,6 +276,12 @@ createServer((req, res) => {
         page: 1,
         total: 1,
       },
+      meta: { request_id: META.request_id },
+    });
+  }
+  if (path === "/api/v1/stats/model-card") {
+    return send(res, 200, {
+      data: { method_version: "2026.10.1", model_card: modelCard, search_match: searchMatch },
       meta: { request_id: META.request_id },
     });
   }
