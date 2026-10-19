@@ -192,7 +192,30 @@
 - **요청 본문은 로그에 남기지 않는다.** 자유 입력 `message`에 연락처 같은 개인정보가 들어올 수 있다. 처리 후 1년이 지나면 `message`를 지운다(docs/60 §5, docs/04)
 
 ### `GET /api/v1/stats/model-card`
-최신 `model_card.payload` (docs/10 §7.3).
+방법론 페이지(docs/40 §4.9) 데이터. 모형 카드와 검색 일치율을 함께 준다(T-034, 2026-10-19 사용자 결정 — 화면이 한 번에 읽는다)
+```json
+{"data": {
+  "method_version": "2026.10.1",
+  "model_card": {"data": {"snapshot_label": "2026-10", "as_of": "2026-10-07"}, "base_rates": [], "logit": {}, "out_of_time": {}},
+  "search_match": {
+    "measured_on": "2026-10-14", "seed": 20261013, "remeasure": false,
+    "population": 407816, "sample_size": 2000,
+    "judged": {"matched": 1917, "rate": "0.9585", "ci": ["0.9488", "0.9664"]},
+    "reference": {"matched": 1885, "rate": "0.9425", "ci": ["0.9314", "0.9519"]},
+    "related_only": {"count": 32, "share": "0.0160"},
+    "failures": [{"type": "jibun_changed", "count": 31, "share": "0.0155"}],
+    "by_open_year": [{"band": "1999년 이전", "n": 170, "matched": 156, "rate": "0.9176", "ci": ["0.8665", "0.9503"], "reference_rate": "0.9000"}]
+  }},
+ "meta": {"request_id": "01J…"}}
+```
+- `model_card`: 최신 `model_card.payload`(docs/10 §7.3 형식 그대로). 고르는 카드는 `places/{pnu}/floors/{floor}`의 `base_rate`와 같다(`method_version='w0'`이 아닌 카드 중 `id` 최대). 없으면 `model_card`·`method_version`이 `null`
+- `search_match`: 최신 `search_match_result.payload`(`id` 최대, docs/04). 없으면 `null`. 정의는 docs/50 §7
+  - `judged` = 판정용 일치(대표 지번이 같거나 관련지번에 있다), `reference` = 참고용 일치(대표 지번만). `rate`·`ci`(Wilson 95%)는 소수 4자리 문자열
+  - `related_only` = 관련지번으로만 일치한 건(`judged.matched − reference.matched`)
+  - `failures` = 판정용으로 일치하지 않은 건의 유형별 건수(`keyword_error`·`transport_error`·`no_result`·`jibun_changed`·`other`, docs/50 §7 순서, 0건 포함)
+  - `by_open_year` = 개업연도 구간별(`1999년 이전`·`2000~2009`·`2010~2015`·`2016~2020`·`2021년 이후`, 개업일 없는 기록이 있으면 `개업일 없음`). 표본이 없는 구간은 빠진다
+  - 건별 결과(기록 키·주소)는 내보내지 않는다
+- `Cache-Control: public, max-age=300`. DB 오류는 503 `SERVICE_UNAVAILABLE`
 
 ### `GET /api/v1/programs?module=funding|closure`
 ```json
