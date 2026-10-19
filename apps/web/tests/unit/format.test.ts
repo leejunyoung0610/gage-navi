@@ -1,12 +1,19 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  daysToMonths,
+  formatCount,
   formatDate,
+  formatFloor,
   formatMonths,
   formatPeriod,
   formatRate,
   formatRateCi,
+  formatRateRange,
+  formatSnapshotLabel,
   formatWon,
+  formatYearMonth,
+  monthsBetween,
 } from "@/lib/format";
 
 // docs/40 §6 예시를 그대로 옮긴다
@@ -106,5 +113,46 @@ describe("formatMonths", () => {
 
   it.each([-1, 1.5])("0 이상의 정수가 아니면 오류: %s", (months) => {
     expect(() => formatMonths(months)).toThrow(RangeError);
+  });
+});
+
+// 층 이력 화면 (docs/40 §4.4, T-033)
+describe("층 이력 화면 형식", () => {
+  it("신뢰구간 범위·건수·스냅샷", () => {
+    expect(formatRateRange(["0.3920", "0.4710"])).toBe("39.2~47.1%");
+    expect(formatCount(14532)).toBe("14,532");
+    expect(formatSnapshotLabel("2026-11")).toBe("2026년 11월");
+    expect(formatSnapshotLabel("2026-03")).toBe("2026년 3월");
+    expect(() => formatSnapshotLabel("2026-11-01")).toThrow(RangeError);
+  });
+
+  it.each([
+    ["B1", "지하 1층"],
+    ["B9", "지하 9층"],
+    ["1", "1층"],
+    ["99", "99층"],
+    ["RF", "옥탑"],
+  ])("층 %s → %s", (floor, expected) => {
+    expect(formatFloor(floor)).toBe(expected);
+  });
+
+  it.each(["0", "B0", "100", "b1", "1F", ""])("층 형식이 아니면 오류: %s", (floor) => {
+    expect(() => formatFloor(floor)).toThrow(RangeError);
+  });
+
+  it("연월·달력 개월 수", () => {
+    expect(formatYearMonth("2011-03-02")).toBe("2011.03");
+    expect(monthsBetween("2011-03-02", "2013-08-30")).toBe(29);
+    expect(monthsBetween("2011-03-30", "2011-04-29")).toBe(0); // 끝 일이 작으면 1개월 덜
+    expect(monthsBetween("2011-03-30", "2011-04-30")).toBe(1);
+    expect(monthsBetween("2013-08-30", "2011-03-02")).toBe(0);
+  });
+
+  it("일수 → 개월 수(1461일 = 48개월, 내림)", () => {
+    expect(daysToMonths(0)).toBe(0);
+    expect(daysToMonths(1461)).toBe(48);
+    expect(daysToMonths(812)).toBe(26);
+    expect(daysToMonths(30)).toBe(0);
+    expect(() => daysToMonths(-1)).toThrow(RangeError);
   });
 });
