@@ -250,3 +250,5 @@ docs/21 §8 (F-S1~S10), docs/22 §7 (C-S1~S12). 가상 규칙 픽스처는 `test
 | `mutation` | 주 1회 | mutmut `rules/engine` |
 | `gitleaks` | PR · push | 전체 커밋 기록의 비밀 값 검사(`.github/workflows/secrets.yml`, 버전·체크섬 고정, 찾은 값은 가림). 걸리면 실패 (ADR-029) |
 | `security` | 주 1회 | pip-audit, pnpm audit |
+
+**main 필수 검사**(T-106, 2026-10-19 사용자 결정): 저장소 규칙(ruleset `main 필수 검사`)으로 PR에서 도는 `api-check`·`api-integration`·`web-check`·`e2e`·`gitleaks`가 모두 통과해야 main에 들어간다. 브랜치 최신화는 요구하지 않는다(rebase 머지, ADR-029). 저장소 관리자는 우회할 수 있다 — 문서만 고치는 `T-000` 커밋을 main에 바로 올리기 위해서다. 바꿀 때는 GitHub 저장소 Settings → Rules → Rulesets
