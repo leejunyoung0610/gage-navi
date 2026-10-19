@@ -1,4 +1,7 @@
-"""CORS — `CORS_ALLOWED_ORIGINS`의 출처만, GET만 (docs/30 §1, T-032). 출처는 가상 예시다."""
+"""CORS — `CORS_ALLOWED_ORIGINS`의 출처만, GET·POST만 (docs/30 §1, T-032·T-033).
+
+출처는 가상 예시다.
+"""
 
 import pytest
 from fastapi import FastAPI
@@ -73,11 +76,31 @@ def test_no_origins_allows_nothing() -> None:
     assert "access-control-allow-origin" not in preflight(client, ALLOWED)
 
 
-def test_only_get_is_allowed() -> None:
+def test_post_with_json_content_type_is_allowed() -> None:
+    """정정 요청 시트가 브라우저에서 JSON으로 POST한다 (T-033)."""
     client = make_client((ALLOWED,))
     response = client.options(
         "/api/v1/ping",
-        headers={"Origin": ALLOWED, "Access-Control-Request-Method": "POST"},
+        headers={
+            "Origin": ALLOWED,
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
     )
-    assert response.status_code == 400  # 사전 요청 거절 — 브라우저가 POST를 보내지 않는다
-    assert response.headers["access-control-allow-methods"] == "GET"
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == ALLOWED
+    assert response.headers["access-control-allow-methods"] == "GET, POST"
+    assert "access-control-allow-credentials" not in response.headers
+
+
+@pytest.mark.parametrize(
+    ("method", "headers"),
+    [("DELETE", None), ("PUT", None), ("POST", "x-request-id"), ("POST", "authorization")],
+)
+def test_other_methods_and_headers_are_refused(method: str, headers: str | None) -> None:
+    client = make_client((ALLOWED,))
+    request_headers = {"Origin": ALLOWED, "Access-Control-Request-Method": method}
+    if headers is not None:
+        request_headers["Access-Control-Request-Headers"] = headers
+    response = client.options("/api/v1/ping", headers=request_headers)
+    assert response.status_code == 400  # 사전 요청 거절 — 브라우저가 요청을 보내지 않는다
