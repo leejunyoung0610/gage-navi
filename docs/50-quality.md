@@ -245,7 +245,7 @@ docs/21 §8 (F-S1~S10), docs/22 §7 (C-S1~S12). 가상 규칙 픽스처는 `test
 | `api-check` | PR · main push | `make check-api` — ruff(check·format --check), mypy, import-linter(모듈 경계·LLM import 제한), pytest(unit·property·scenario·golden) |
 | `api-integration` | PR | docker postgres로 마이그레이션 + 통합 테스트 |
 | `web-check` | PR · main push | `make check-web` — eslint, tsc, prettier --check, vitest (T-004), `gen:api` 차이 검사(`make check-api-types` — 다시 만든 `lib/api/types.ts`가 커밋된 파일과 다르면 실패, T-031). `check_copy`는 T-037에서 추가 |
-| `e2e` | PR(라벨) · main | Playwright (API 목 서버) |
+| `e2e` | PR · main push | `make e2e` — 프로덕션 빌드 + Playwright 전체, 가상 API(`tests/e2e/mock-api.mjs`). 실패하면 머지할 수 없도록 main 필수 검사로 둔다(T-106, 2026-10-19 사용자 결정 — 처음 설계는 라벨 붙은 PR만) |
 | `e2e-full` | main · 게이트 판정 시 | docker compose(db+api+web) 실제 스택 Playwright — 정정 요청·재생성 흐름 |
 | `mutation` | 주 1회 | mutmut `rules/engine` |
 | `gitleaks` | PR · push | 전체 커밋 기록의 비밀 값 검사(`.github/workflows/secrets.yml`, 버전·체크섬 고정, 찾은 값은 가림). 걸리면 실패 (ADR-029) |
