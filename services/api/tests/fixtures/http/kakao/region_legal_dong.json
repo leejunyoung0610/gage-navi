@@ -1,0 +1,28 @@
+{
+  "_comment": "가상 예시 — 카카오 실제 응답이 아니다. 공식 개발 가이드(로컬 API › 좌표로 행정구역정보 받기)의 응답 형식으로 만들었다. 녹화 금지(AGENTS.md §3, data/README.md)",
+  "meta": { "total_count": 2 },
+  "documents": [
+    {
+      "region_type": "B",
+      "code": "1121510700",
+      "address_name": "가상시 가상구 가상동",
+      "region_1depth_name": "가상시",
+      "region_2depth_name": "가상구",
+      "region_3depth_name": "가상동",
+      "region_4depth_name": "",
+      "x": 127.0,
+      "y": 37.5
+    },
+    {
+      "region_type": "H",
+      "code": "1121599999",
+      "address_name": "가상시 가상구 가상행정동",
+      "region_1depth_name": "가상시",
+      "region_2depth_name": "가상구",
+      "region_3depth_name": "가상행정동",
+      "region_4depth_name": "",
+      "x": 127.0,
+      "y": 37.5
+    }
+  ]
+}

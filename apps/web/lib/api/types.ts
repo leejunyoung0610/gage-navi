@@ -38,6 +38,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/address/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reverse Address */
+        get: operations["reverse_address_api_v1_address_reverse_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/places/{pnu}": {
         parameters: {
             query?: never;
@@ -164,7 +181,7 @@ export interface components {
         /** AddressItem */
         AddressItem: {
             /** Road Addr */
-            road_addr: string;
+            road_addr: string | null;
             /** Jibun Addr */
             jibun_addr: string;
             /** Building Name */
@@ -174,7 +191,19 @@ export interface components {
             /** Has History */
             has_history: boolean | null;
             /** Related Pnus */
-            related_pnus: string[];
+            related_pnus: string[] | null;
+        };
+        /** AddressReverseData */
+        AddressReverseData: {
+            /** Pnu */
+            pnu: string | null;
+            /** Items */
+            items: components["schemas"]["AddressItem"][];
+        };
+        /** AddressReverseResponse */
+        AddressReverseResponse: {
+            data: components["schemas"]["AddressReverseData"];
+            meta: components["schemas"]["app__address__router__Meta"];
         };
         /** AddressSearchData */
         AddressSearchData: {
@@ -622,6 +651,65 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AddressSearchResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reverse_address_api_v1_address_reverse_get: {
+        parameters: {
+            query: {
+                lat: number;
+                lng: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddressReverseResponse"];
                 };
             };
             /** @description Unprocessable Entity */
