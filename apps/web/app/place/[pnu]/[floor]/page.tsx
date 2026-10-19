@@ -5,7 +5,6 @@ import { notFound } from "next/navigation";
 import { BaseRateCard } from "@/components/BaseRateCard";
 import { CorrectionButton, CorrectionProvider } from "@/components/CorrectionSheet";
 import { FloorTimeline } from "@/components/FloorTimeline";
-import { FundingLink } from "@/components/FundingLink";
 import { PlaceNotices } from "@/components/PlaceNotices";
 import { daysToMonths, formatCount, formatFloor, formatMonths } from "@/lib/format";
 import { fetchFloor, type FloorData } from "@/lib/place";
@@ -83,7 +82,6 @@ export default async function FloorPage({ params }: { params: Params }) {
           />
         </section>
         <div className="space-y-2">
-          <FundingLink pnu={data.pnu} />
           <CorrectionButton />
         </div>
       </main>

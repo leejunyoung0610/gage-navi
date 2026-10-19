@@ -241,7 +241,7 @@ bulk(j, d) = c(j, d) >= 30 AND c(j, d) >= 10 * m(j)
 `{record_id, name, biz_category, license_type, opened_on, closed_on, status, tenure_days, ho_list, bulk_closure, stale_suspect}`
 - `tenure_days` = (`closed_on` 또는 기준일) − `opened_on`
 - 같은 `ho_list` 원소를 공유하는 기록끼리는 화면에서 "같은 호수로 신고된 기록"으로 묶어 색을 맞춘다 (연결선 표시)
-- `has_concurrent` = 이력 중 영업 기간이 30일 넘게 겹치는 쌍 존재 → "이 층에는 여러 점포가 함께 있을 수 있어요"
+- `has_concurrent` = 이력 중 영업 기간이 30일 넘게 겹치는 쌍 존재 → 화면 알림 "이 층에는 영업 기간이 한 달 넘게 겹치는 기록이 있어요. 점포가 여러 개였거나 앞 가게의 폐업 신고가 늦어졌을 수 있어요."(docs/40 §4.4-4). 겹침은 여러 점포일 수도 신고 지연일 수도 있어(analysis/README §4.1) 함께 영업했다고 단정하지 않는다
 - `record_suppression`에 있는 기록과 `no_fixed_place = true`인 기록은 제외 (§1.1). 편의점은 이력에 보이고 `biz_category`로 구분된다
 
 **빌드 (`jobs.build_history`, T-018)** — 정규화·미갱신 표시 뒤에 실행한다. `parcel`·`floor_summary`·`record_prior`를 전부 다시 만든다(같은 입력이면 같은 결과)

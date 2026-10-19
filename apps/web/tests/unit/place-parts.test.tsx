@@ -1,21 +1,16 @@
 // @vitest-environment jsdom
 /**
- * 필지·층 페이지 부품 (docs/40 §4.3·4.4, T-033): 관련 필지, 정책자금 링크, 알림.
+ * 필지·층 페이지 부품 (docs/40 §4.3·4.4, T-033): 관련 필지, 알림.
  * PNU·주소는 모두 가상 예시다.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { FundingLink } from "@/components/FundingLink";
 import { NOTICE_TEXT, PlaceNotices } from "@/components/PlaceNotices";
 import { RelatedParcels } from "@/components/RelatedParcels";
 import type { AddressItem } from "@/lib/address";
 import { findRelatedParcels } from "@/lib/place";
-import { PROFILE_STORAGE_KEY } from "@/lib/profile-store";
-
-const push = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 
 const API = "http://api.example.test"; // 가상 예시
 const PNU = "1121510700100470001";
@@ -48,8 +43,6 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   fetchMock.mockReset();
-  push.mockReset();
-  localStorage.clear();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
@@ -119,29 +112,6 @@ describe("RelatedParcels", () => {
   });
 });
 
-describe("FundingLink (docs/40 §4.4-6)", () => {
-  it("프로필에 시도·시군구 코드를 저장하고 /funding으로", () => {
-    localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify({ schema_version: 1 }));
-    render(<FundingLink pnu={PNU} />);
-    fireEvent.click(screen.getByRole("button", { name: "이 자리로 정책자금 알아보기" }));
-    expect(JSON.parse(localStorage.getItem(PROFILE_STORAGE_KEY)!)).toEqual({
-      schema_version: 1,
-      region: { sido_code: "11", sigungu_code: "11215" },
-    });
-    expect(push).toHaveBeenCalledWith("/funding");
-  });
-
-  it("저장소가 막혀도 이동한다", () => {
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-      throw new DOMException("막힘 (가상 예시)", "QuotaExceededError");
-    });
-    render(<FundingLink pnu={PNU} />);
-    fireEvent.click(screen.getByRole("button", { name: "이 자리로 정책자금 알아보기" }));
-    expect(push).toHaveBeenCalledWith("/funding");
-    vi.restoreAllMocks();
-  });
-});
-
 describe("PlaceNotices (docs/40 §4.4-4)", () => {
   it("아는 알림만, 층 정보 누락은 필지 페이지 링크와 함께", () => {
     render(
@@ -152,6 +122,9 @@ describe("PlaceNotices (docs/40 §4.4-4)", () => {
     );
     const list = screen.getAllByRole("listitem");
     expect(list).toHaveLength(2);
+    expect(list[0]!.textContent).toBe(
+      "이 층에는 영업 기간이 한 달 넘게 겹치는 기록이 있어요. 점포가 여러 개였거나 앞 가게의 폐업 신고가 늦어졌을 수 있어요.",
+    );
     expect(list[0]!.textContent).toBe(NOTICE_TEXT.multiple_units_possible);
     expect(screen.getByRole("link", { name: "필지 페이지 보기" }).getAttribute("href")).toBe(
       `/place/${PNU}`,

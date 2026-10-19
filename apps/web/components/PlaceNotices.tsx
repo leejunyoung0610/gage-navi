@@ -2,8 +2,9 @@ import Link from "next/link";
 
 /** 층 이력 알림 문구 (docs/40 §4.4-4, 발생 조건은 docs/10 §7.1). 모르는 값은 보여주지 않는다 */
 export const NOTICE_TEXT: Record<string, string> = {
+  // 겹침은 여러 점포일 수도 신고 지연일 수도 있다(analysis/README §4.1) — 함께 영업했다고 단정하지 않는다
   multiple_units_possible:
-    "이 층에서는 여러 가게가 같은 시기에 함께 영업한 적이 있어요. 한 층에 점포가 여러 개일 수 있어요.",
+    "이 층에는 영업 기간이 한 달 넘게 겹치는 기록이 있어요. 점포가 여러 개였거나 앞 가게의 폐업 신고가 늦어졌을 수 있어요.",
   bulk_closure_present:
     "폐업 처리 몰린 날에 폐업된 기록이 있어요. 그 가게들이 실제로 문을 닫은 날은 더 이를 수 있어요.",
   stale_suspect_present:
