@@ -54,9 +54,14 @@ export function formatRate(rate: string): string {
   return `${permilleText(toPermille(rate))}%`;
 }
 
+/** `["0.3920", "0.4710"]` → `39.2~47.1%` */
+export function formatRateRange([lo, hi]: readonly [string, string]): string {
+  return `${permilleText(toPermille(lo))}~${permilleText(toPermille(hi))}%`;
+}
+
 /** `["0.3920", "0.4710"]` → `(95% 신뢰구간 39.2~47.1%)` */
-export function formatRateCi([lo, hi]: readonly [string, string]): string {
-  return `(95% 신뢰구간 ${permilleText(toPermille(lo))}~${permilleText(toPermille(hi))}%)`;
+export function formatRateCi(ci: readonly [string, string]): string {
+  return `(95% 신뢰구간 ${formatRateRange(ci)})`;
 }
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -77,14 +82,15 @@ export function formatDate(value: string): string {
   return `${year}년 ${month}월 ${day}일`;
 }
 
-function yearMonth(value: string): string {
+/** 타임라인 연월 `"2011-03-02"` → `2011.03` */
+export function formatYearMonth(value: string): string {
   const { year, month } = parseDate(value);
   return `${year}.${String(month).padStart(2, "0")}`;
 }
 
 /** 타임라인 기간 `2011.03 – 2013.08` */
 export function formatPeriod(start: string, end: string): string {
-  return `${yearMonth(start)} – ${yearMonth(end)}`;
+  return `${formatYearMonth(start)} – ${formatYearMonth(end)}`;
 }
 
 /** 기간 길이(개월 수) `29` → `2년 5개월` */
@@ -97,4 +103,41 @@ export function formatMonths(months: number): string {
   if (years === 0) return `${rest}개월`;
   if (rest === 0) return `${years}년`;
   return `${years}년 ${rest}개월`;
+}
+
+/** 건수 `14532` → `14,532` */
+export function formatCount(count: number): string {
+  return groupFormat.format(count);
+}
+
+/** 스냅샷 표기 `"2026-11"` → `2026년 11월` */
+export function formatSnapshotLabel(label: string): string {
+  const match = /^(\d{4})-(\d{2})$/.exec(label);
+  if (!match) throw new RangeError(`YYYY-MM 스냅샷이 아니에요: ${label}`);
+  return `${match[1]}년 ${Number(match[2])}월`;
+}
+
+/** 층 값(URL 표기) `B1` → `지하 1층`, `1` → `1층`, `RF` → `옥탑` */
+export function formatFloor(floor: string): string {
+  if (floor === "RF") return "옥탑";
+  const basement = /^B([1-9])$/.exec(floor);
+  if (basement) return `지하 ${basement[1]}층`;
+  if (/^[1-9]\d?$/.test(floor)) return `${floor}층`;
+  throw new RangeError(`층 값이 아니에요: ${floor}`);
+}
+
+/** 두 날짜(`YYYY-MM-DD`) 사이의 달력 개월 수. 끝 날짜의 일이 시작 일보다 작으면 1개월 덜 센다 */
+export function monthsBetween(start: string, end: string): number {
+  const a = parseDate(start);
+  const b = parseDate(end);
+  const months = (b.year - a.year) * 12 + (b.month - a.month) - (b.day < a.day ? 1 : 0);
+  return Math.max(0, months);
+}
+
+/** 일수 → 개월 수(내림). 1461일 = 48개월(윤년 포함 4년)로 정수 연산만 쓴다 */
+export function daysToMonths(days: number): number {
+  if (!Number.isSafeInteger(days) || days < 0) {
+    throw new RangeError(`0 이상의 정수 일수가 아니에요: ${days}`);
+  }
+  return Math.floor((days * 48) / 1461);
 }

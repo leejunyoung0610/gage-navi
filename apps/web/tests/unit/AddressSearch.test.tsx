@@ -59,6 +59,7 @@ const item = (overrides: Partial<AddressItem> = {}): AddressItem => ({
   pnu: PNU,
   has_history: true,
   related_pnus: [],
+  related_with_history: [],
   ...overrides,
 });
 
