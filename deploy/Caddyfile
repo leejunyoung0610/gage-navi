@@ -1,0 +1,15 @@
+# 운영 API 앞의 HTTPS (T-081, docs/01 §5). 인증서는 Caddy가 자동으로 받는다.
+#
+# 접속 기록의 IP (docs/60 §5): 사이트 블록에 `log` 지시어를 쓰지 않는다 — 없으면 접속 로그를
+# 남기지 않는다. 오류 로그(`http.log.error`)에는 요청의 `remote_ip`·`client_ip`가 들어 있어
+# 기본 로거에서 뺀다. 배포 후 실제 로그로 확인한다(deploy/README.md 4단계).
+{
+	log default {
+		exclude http.log.error
+	}
+}
+
+{$API_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy api:8000
+}
