@@ -255,6 +255,11 @@ createServer((req, res) => {
     });
     return res.end();
   }
+  // 측정 이벤트(T-104): 본문 없이 204 (docs/30 `POST /measure/events`)
+  if (req.method === "POST" && path === "/api/v1/measure/events") {
+    res.writeHead(204, { "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" });
+    return res.end();
+  }
   if (req.method === "POST" && path === `/api/v1/places/${PNU}/corrections`) {
     return send(res, 201, { data: { id: 55 }, meta: { request_id: META.request_id } });
   }

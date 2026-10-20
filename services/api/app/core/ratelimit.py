@@ -1,4 +1,7 @@
-"""IP 기준 호출 제한 (docs/30 §1). 고정 창 방식, 프로세스 메모리에만 둔다."""
+"""IP 기준 호출 제한 (docs/30 §1). 고정 창 방식, 프로세스 메모리에만 둔다.
+
+IP는 제한 시간이 지나면 버리고 디스크·DB·로그에 쓰지 않는다(docs/60 §5, `/privacy` 고지).
+"""
 
 import math
 import time
@@ -10,6 +13,7 @@ from app.core.errors import ApiError, ErrorCode
 
 LOOKUP_LIMIT_PER_MINUTE = 120  # 조회 API (docs/30 §1)
 CORRECTION_LIMIT_PER_HOUR = 5  # 정정 요청 (docs/30 §1)
+EVENT_LIMIT_PER_MINUTE = 120  # 측정 이벤트, 조회와 따로 센다 (docs/30 §1, T-104)
 _PURGE_THRESHOLD = 10_000
 
 
@@ -46,6 +50,7 @@ class RateLimiter:
 
 lookup_limiter = RateLimiter(LOOKUP_LIMIT_PER_MINUTE, 60.0)
 correction_limiter = RateLimiter(CORRECTION_LIMIT_PER_HOUR, 3600.0)
+event_limiter = RateLimiter(EVENT_LIMIT_PER_MINUTE, 60.0)
 
 
 def _enforce(limiter: RateLimiter, request: Request) -> None:
@@ -67,3 +72,8 @@ def limit_lookup(request: Request) -> None:
 def limit_correction(request: Request) -> None:
     """정정 요청 의존성 (IP당 5회/시간)."""
     _enforce(correction_limiter, request)
+
+
+def limit_event(request: Request) -> None:
+    """측정 이벤트 의존성 (IP당 120회/분)."""
+    _enforce(event_limiter, request)

@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-// docs/40 §3: 데이터 출처, 방법론 링크, 대행·수수료 없음, 정정 요청 안내
+// docs/40 §3: 데이터 출처, 방법론 링크, 대행·수수료 없음, 정정 요청 안내, 개인정보 안내
 export function SiteFooter() {
   return (
     <footer className="border-line bg-surface text-muted mt-12 border-t">
@@ -13,6 +13,11 @@ export function SiteFooter() {
         </p>
         <p>가게내비는 신청을 대행하거나 수수료를 받지 않아요.</p>
         <p>자리 이력 정보가 잘못됐다면 그 화면의 &ldquo;정보가 잘못됐나요?&rdquo;로 알려 주세요.</p>
+        <p>
+          <Link href="/privacy" className="min-h-touch inline-flex items-center underline">
+            개인정보 안내
+          </Link>
+        </p>
       </div>
     </footer>
   );

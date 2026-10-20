@@ -1,6 +1,6 @@
 # 04. 데이터 모델 (PostgreSQL 16 + PostGIS)
 
-> 마이그레이션은 Alembic으로만. §2 = `0001_location`(T-003) + `0003_normalize`(T-016: `license_record.no_fixed_place`, `closure_surge_day`) + `0004_stale_area`(T-017: `license_record.stale_area_match`) + `0005_prior_ex_surge`(T-018: `record_prior.prior_closures_floor_ex_surge`) + `0006_floor_scale`(T-019b: `floor_summary.max_concurrent`, `record_prior.max_concurrent_at_open`, `base_rate.floor_scale`), §3 = `0002_rules`(T-005). `0007_admin_auth`(T-023)는 §2 `correction_request.revalidated_at`과 §3 `admin_user` 잠금 컬럼·`admin_session`을 더한다. 아래 DDL은 기준 명세이며, 구현 시 이름·타입·제약을 그대로 따른다. 변경은 이 문서를 먼저 고친다.
+> 마이그레이션은 Alembic으로만. §2 = `0001_location`(T-003) + `0003_normalize`(T-016: `license_record.no_fixed_place`, `closure_surge_day`) + `0004_stale_area`(T-017: `license_record.stale_area_match`) + `0005_prior_ex_surge`(T-018: `record_prior.prior_closures_floor_ex_surge`) + `0006_floor_scale`(T-019b: `floor_summary.max_concurrent`, `record_prior.max_concurrent_at_open`, `base_rate.floor_scale`), §3 = `0002_rules`(T-005). `0007_admin_auth`(T-023)는 §2 `correction_request.revalidated_at`과 §3 `admin_user` 잠금 컬럼·`admin_session`을 더한다. `0009_measure`(T-104)는 §2 `measure_daily_count`를 더한다. 아래 DDL은 기준 명세이며, 구현 시 이름·타입·제약을 그대로 따른다. 변경은 이 문서를 먼저 고친다.
 
 ## 1. 공통 규칙
 
@@ -171,6 +171,16 @@ CREATE TABLE search_match_result (
   measured_on DATE NOT NULL,
   payload     JSONB NOT NULL,           -- docs/30 `/stats/model-card`의 `search_match` 형식
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 방문 측정·"도움이 됐나요" 일별 합계 (T-104, ADR-027, docs/30 `POST /measure/events`, docs/70 §5. 마이그레이션 0009_measure)
+-- 이벤트 한 건씩 저장하지 않고 (날짜, 이벤트)마다 합계만 둔다. 식별자·IP·User-Agent·주소·필지 열이 없고,
+-- 마지막 이벤트 시각이 남지 않도록 시각 열(created_at·updated_at)도 두지 않는다
+CREATE TABLE measure_daily_count (
+  day    DATE NOT NULL,             -- 한국 시간 날짜. `revisit_7d`는 첫 방문 날짜
+  event  TEXT NOT NULL CHECK (event IN ('first_visit','revisit_7d','helpful_yes','helpful_no')),
+  count  INT NOT NULL CHECK (count >= 0),
+  PRIMARY KEY (day, event)
 );
 
 -- 정정·삭제 요청 (연락처 필드 없음. 자유 입력 `message`에 연락처가 들어올 수 있어 로그에 남기지 않고,

@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { BaseRateCard } from "@/components/BaseRateCard";
 import { CorrectionButton, CorrectionProvider } from "@/components/CorrectionSheet";
 import { FloorTimeline } from "@/components/FloorTimeline";
+import { HelpfulPrompt } from "@/components/HelpfulPrompt";
 import { PlaceNotices } from "@/components/PlaceNotices";
 import { daysToMonths, formatCount, formatFloor, formatMonths } from "@/lib/format";
 import { isIndexableFloor, pageRobots } from "@/lib/indexing";
@@ -84,6 +85,7 @@ export default async function FloorPage({ params }: { params: Params }) {
             label="층 이력"
           />
         </section>
+        <HelpfulPrompt />
         <div className="space-y-2">
           <CorrectionButton />
         </div>

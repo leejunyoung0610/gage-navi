@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
+import { VisitMeasure } from "@/components/VisitMeasure";
 import { pageRobots } from "@/lib/indexing";
 
 import { Providers } from "./providers";
@@ -33,6 +34,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <Providers>{children}</Providers>
         </div>
         <SiteFooter />
+        <VisitMeasure />
       </body>
     </html>
   );

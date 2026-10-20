@@ -52,7 +52,7 @@ check_untyped_defs = true
 
 # strict 대상 (docs/01 §2). `strict`는 모듈별로 켤 수 없어 플래그를 나열한다.
 [[tool.mypy.overrides]]
-module = ["app.rules", "app.rules.*", "app.location", "app.location.*"]
+module = ["app.rules", "app.rules.*", "app.location", "app.location.*", "app.measure", "app.measure.*"]
 disallow_any_generics = true
 disallow_subclassing_any = true
 disallow_untyped_calls = true
