@@ -30,13 +30,13 @@
 | `INTERNAL` | 500 | 그 외 (메시지는 일반 문구, 상세는 Sentry) |
 
 - **요청 ID** (T-023, 2026-10-14 사용자 지시): 요청마다 **한 번** 만든다(ULID 26자). 같은 값을 성공·오류 응답의 `meta.request_id`, 응답 헤더 `X-Request-ID`, 그 요청에서 남기는 모든 로그(`request_id=…`), Sentry 이벤트 태그(T-082)에 쓴다. 사용자가 오류 화면의 ID를 알려 주면 그 값으로 로그를 찾는다. 클라이언트가 보낸 `X-Request-ID`는 쓰지 않는다(위조·충돌 방지)
-- **접속 로그** (T-023): 요청마다 한 줄 `request_id=… method=… path=… status=… latency_ms=…`(로거 `app.access`). 경로는 쿼리스트링을 뺀 것이고 본문은 남기지 않는다(docs/01 §6)
+- **접속 로그** (T-023): 요청마다 한 줄 `request_id=… method=… path=… status=… latency_ms=…`(로거 `app.access`). 경로는 쿼리스트링을 뺀 것이고 본문은 남기지 않는다(docs/01 §6). **어떤 로그에도 클라이언트 IP를 남기지 않는다** — uvicorn 접속 로그의 클라이언트 주소는 `-`로 바꾼다(T-104, docs/60 §5)
 - **`VALIDATION_ERROR`의 `details.fields`** (T-023): `{"<필드>": "<오류 종류>"}`. 필드는 요청 위치(`body`·`query`·`path`)를 뺀 경로를 `.`로 이은 것(`"message"`, `"items.0.code"`), 오류 종류는 Pydantic 오류 유형(`missing`, `string_too_long`, `extra_forbidden` 등) 또는 라우터가 정한 값(`invalid_format` 등). **입력값은 응답·로그에 되돌려 보내지 않는다**(FastAPI 기본 형식의 `input`을 쓰지 않는다 — 정정 요청 메시지에 연락처가 들어올 수 있다)
 - **`INTERNAL`** (T-023): 처리되지 않은 예외는 `"일시적인 문제가 생겼어요. 잠시 후 다시 시도해 주세요."`로 응답한다. 로그에는 요청 ID·경로·예외 종류 이름만 남긴다(예외 메시지에 요청 값이 들어 있을 수 있다). DB 엔진도 오류 메시지에 SQL 인자를 넣지 않게 설정한다(`hide_parameters`)
 
-**CORS** (T-032, 2026-10-19): 웹은 브라우저에서 공개 API를 바로 부른다(주소 검색·좌표 결과). 환경 변수 `CORS_ALLOWED_ORIGINS`(쉼표로 구분한 출처 목록, 예 `http://localhost:3000`)에 적힌 출처만 허용한다. 값이 없으면 어느 출처도 허용하지 않는다(기본값으로 `*`를 쓰지 않는다). 허용 메서드는 브라우저가 부르는 `GET`과 정정 요청(`POST /places/{pnu}/corrections`, T-033 정정 요청 시트)의 `POST`이고, 허용 요청 헤더는 JSON 본문용 `Content-Type`뿐이다(T-033, 2026-10-19). 자격 증명(쿠키)은 허용하지 않는다. 운영 도메인 등록은 T-081
+**CORS** (T-032, 2026-10-19): 웹은 브라우저에서 공개 API를 바로 부른다(주소 검색·좌표 결과). 환경 변수 `CORS_ALLOWED_ORIGINS`(쉼표로 구분한 출처 목록, 예 `http://localhost:3000`)에 적힌 출처만 허용한다. 값이 없으면 어느 출처도 허용하지 않는다(기본값으로 `*`를 쓰지 않는다). 허용 메서드는 브라우저가 부르는 `GET`과 정정 요청(`POST /places/{pnu}/corrections`, T-033 정정 요청 시트)·측정 이벤트(`POST /measure/events`, T-104)의 `POST`이고, 허용 요청 헤더는 JSON 본문용 `Content-Type`뿐이다(T-033, 2026-10-19). 자격 증명(쿠키)은 허용하지 않는다. 운영 도메인 등록은 T-081
 
-**호출 제한(IP 기준)**: 조회 120회/분(주소 검색 포함), 평가(`*/evaluate`) 20회/분, 정정 요청 5회/시간.
+**호출 제한(IP 기준)**: 조회 120회/분(주소 검색 포함), 평가(`*/evaluate`) 20회/분, 정정 요청 5회/시간, 측정 이벤트 120회/분(조회와 따로 센다, T-104). IP는 프로세스 메모리에만 두고 제한 시간이 지나면 버린다(docs/60 §5).
 **압축**: 요청에 `Accept-Encoding: gzip`이 있고 응답 본문이 1,000바이트 이상이면 gzip으로 압축한다(T-022). 큰 목록(층 이력 `history`, 층 미상 기록 `history_without_floor`)을 자르지 않고 전부 내보내는 대신 압축한다.
 **캐시**: 장소 조회 `Cache-Control: public, max-age=300` (API 앞에 CDN 없음) / 평가 `no-store`. 웹의 장소 페이지는 ISR(1일)이며, 관리자가 정정 요청으로 기록을 숨기면 API가 웹의 `POST /api/revalidate`(헤더 `x-revalidate-secret`)를 호출해 해당 `/place/{pnu}`·`/place/{pnu}/{floor}`를 즉시 재생성한다.
 
@@ -190,6 +190,14 @@
 - `record_id`를 주면 그 필지에서 이력에 보이는 기록이어야 한다(아니면 422 `details.fields.record_id = "not_in_place"`). `floor`도 주면 기록의 층과 같아야 한다(아니면 `details.fields.floor = "not_record_floor"`)
 - 필지가 없으면 404 `NO_HISTORY`. 호출 제한 5회/시간(IP), `Cache-Control: no-store`
 - **요청 본문은 로그에 남기지 않는다.** 자유 입력 `message`에 연락처 같은 개인정보가 들어올 수 있다. 처리 후 1년이 지나면 `message`를 지운다(docs/60 §5, docs/04)
+
+### `POST /api/v1/measure/events`
+방문 측정·"도움이 됐나요" 이벤트(T-104, ADR-027, docs/40 §10, docs/70 §5). 요청 `{"event": "first_visit", "date": "2026-11-03"}` → **204**(본문 없음), `Cache-Control: no-store`
+- `event`: `first_visit` | `revisit_7d` | `helpful_yes` | `helpful_no`. `date`: `YYYY-MM-DD`(한국 시간). `revisit_7d`의 `date`는 **첫 방문 날짜**, 나머지는 이벤트가 난 날짜
+- 다른 필드는 받지 않는다(422 `extra_forbidden`). 식별자·주소·필지·층·User-Agent를 받지 않고 읽지 않는다
+- 날짜 범위(서버의 한국 시간 오늘 `T` 기준, 브라우저·서버 시계와 자정 경계 오차로 하루 여유): `first_visit`·`helpful_*`는 `T−1 ≤ date ≤ T+1`, `revisit_7d`는 `T−8 ≤ date ≤ T`. 벗어나면 422 `details.fields.date = "out_of_range"`
+- 처리: `measure_daily_count`(docs/04)의 `(date, event)` 합계를 1 늘린다. 이벤트 한 건씩 저장하지 않는다. **요청 본문·결과를 로그에 남기지 않는다**
+- **인증이 없다.** 직접 요청으로 숫자를 부풀릴 수 있다(docs/70 §5 측정 한계). 호출 제한 120회/분(IP, 메모리), 429. DB 오류는 503 `SERVICE_UNAVAILABLE`
 
 ### `GET /api/v1/stats/model-card`
 방법론 페이지(docs/40 §4.9) 데이터. 모형 카드와 검색 일치율을 함께 준다(T-034, 2026-10-19 사용자 결정 — 화면이 한 번에 읽는다)
