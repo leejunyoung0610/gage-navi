@@ -2,6 +2,8 @@
 
 키는 (정제한 검색어, 페이지), 값은 도로명주소 API 결과뿐이다. 요청한 사람에 관한 값
 (IP, 시각, 헤더)은 넣지 않는다. 프로세스 메모리에만 있고 디스크·DB에 쓰지 않는다.
+만료 항목은 `purge_expired`(앱의 주기 정리, `app.core.memory_sweep`)로 지운다. 남는 최대 시간 =
+TTL + 정리 주기(docs/60 §5, `/privacy` 고지).
 """
 
 import time
@@ -42,6 +44,13 @@ class SearchCache:
         self._entries.move_to_end((keyword, page))
         while len(self._entries) > self._max:
             self._entries.popitem(last=False)
+
+    def purge_expired(self) -> None:
+        """만료된 항목을 지운다 (주기 정리)."""
+        now = self._clock()
+        expired = [key for key, (expires_at, _) in self._entries.items() if now >= expires_at]
+        for key in expired:
+            del self._entries[key]
 
     def clear(self) -> None:
         self._entries.clear()

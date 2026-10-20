@@ -176,14 +176,17 @@ export function resetVisitMeasureForTest(): void {
   started = null;
 }
 
-export type HelpfulResult = "sent" | "skipped";
+/** `measure_off`: 측정 끄기를 켰다. `unavailable`: 봇으로 보이거나 저장소를 쓸 수 없다 */
+export type HelpfulResult = "sent" | "measure_off" | "unavailable";
 
-/** "도움이 됐나요" 예/아니오. 보내도 되는 브라우저가 아니면 보내지 않고 `skipped` */
+/** "도움이 됐나요" 예/아니오. 보내도 되는 브라우저가 아니면 보내지 않고 그 이유를 돌려준다 */
 export function sendHelpful(
   answer: "yes" | "no",
   deps: MeasureDeps = browserDeps(),
 ): HelpfulResult {
-  if (!canMeasure(deps.storage, deps.nav)) return "skipped";
+  if (!canMeasure(deps.storage, deps.nav)) {
+    return deps.storage !== null && isMeasureOff(deps.storage) ? "measure_off" : "unavailable";
+  }
   void deps.send(answer === "yes" ? "helpful_yes" : "helpful_no", kstDate(deps.now));
   return "sent";
 }

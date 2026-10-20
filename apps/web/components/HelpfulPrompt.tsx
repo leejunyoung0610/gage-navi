@@ -9,7 +9,9 @@ const TEXT = {
   yes: "예",
   no: "아니오",
   thanks: "알려 주셔서 고마워요.",
-  skipped: "통계에서 빠지기를 켜 두어서 응답을 보내지 않았어요.",
+  measure_off: "통계에서 빠지기를 켜 두어서 응답을 보내지 않았어요.",
+  // 봇으로 보이는 브라우저, 저장소를 쓸 수 없는 브라우저 (lib/measure.ts `canMeasure`)
+  unavailable: "이 브라우저에서는 응답을 보낼 수 없어서 보내지 않았어요.",
 } as const;
 
 /**
@@ -21,7 +23,7 @@ export function HelpfulPrompt() {
   if (result !== null) {
     return (
       <p role="status" className="text-muted text-sm">
-        {result === "sent" ? TEXT.thanks : TEXT.skipped}
+        {result === "sent" ? TEXT.thanks : TEXT[result]}
       </p>
     );
   }
