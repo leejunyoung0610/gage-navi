@@ -109,10 +109,14 @@ describe("HelpfulPrompt", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("봇은 요청을 보내지 않는다", async () => {
+  it("봇은 요청을 보내지 않고, 측정 끄기와 다른 문구로 알린다", async () => {
     setBrowser({ webdriver: true });
     render(<HelpfulPrompt />);
     fireEvent.click(screen.getByRole("button", { name: "아니오" }));
+    expect(
+      await screen.findByText("이 브라우저에서는 응답을 보낼 수 없어서 보내지 않았어요."),
+    ).toBeTruthy();
+    expect(screen.queryByText(/통계에서 빠지기/)).toBeNull();
     await settle();
     expect(fetchMock).not.toHaveBeenCalled();
   });

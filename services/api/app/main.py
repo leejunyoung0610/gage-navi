@@ -1,15 +1,22 @@
-"""FastAPI 앱: 라우터 등록, 예외 핸들러."""
+"""FastAPI 앱: 라우터 등록, 예외 핸들러, 메모리 주기 정리."""
+
+import asyncio
+import contextlib
+from collections.abc import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.middleware.gzip import GZipMiddleware
 
 from app.address.router import router as address_router
+from app.address.router import search_cache
 from app.admin.router import router as admin_router
 from app.core.config import get_settings
 from app.core.cors import add_cors
 from app.core.errors import register_error_handlers
 from app.core.health import router as health_router
 from app.core.logging import configure_logging
+from app.core.memory_sweep import sweep_periodically
+from app.core.ratelimit import LIMITERS
 from app.location.corrections.router import router as corrections_router
 from app.location.places.router import router as places_router
 from app.location.sitemap.router import router as sitemap_router
@@ -19,8 +26,22 @@ from app.measure.router import router as measure_router
 configure_logging()
 
 GZIP_MINIMUM_BYTES = 1000
+# 1분마다 만료 값을 지우는 메모리 저장소: 호출 제한의 IP, 주소 검색 캐시 (docs/60 §5)
+SWEEP_TARGETS = (*LIMITERS, search_cache)
 
-app = FastAPI(title="가게내비 API", version="0.1.0")
+
+@contextlib.asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    sweeper = asyncio.create_task(sweep_periodically(SWEEP_TARGETS))
+    try:
+        yield
+    finally:
+        sweeper.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await sweeper
+
+
+app = FastAPI(title="가게내비 API", version="0.1.0", lifespan=lifespan)
 register_error_handlers(app)
 # 큰 목록(층 이력·층 미상 기록)은 자르지 않고 압축한다 (docs/30 §1 "압축")
 app.add_middleware(GZipMiddleware, minimum_size=GZIP_MINIMUM_BYTES)

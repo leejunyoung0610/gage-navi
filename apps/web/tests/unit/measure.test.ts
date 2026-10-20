@@ -13,6 +13,7 @@ import {
   isLikelyBot,
   kstDate,
   runVisitMeasure,
+  sendHelpful,
   sendMeasureEvent,
   setMeasureOff,
   type MeasureDeps,
@@ -165,6 +166,28 @@ describe("runVisitMeasure", () => {
     const full = deps(broken, "2026-11-01");
     await runVisitMeasure(full.value);
     expect([...none.sent, ...full.sent]).toEqual([]);
+  });
+});
+
+describe("sendHelpful", () => {
+  it("보내면 sent, 날짜는 오늘", () => {
+    const ok = deps(memoryStorage(), "2026-11-01");
+    expect(sendHelpful("yes", ok.value)).toBe("sent");
+    expect(ok.sent).toEqual([["helpful_yes", "2026-11-01"]]);
+  });
+
+  it("보내지 않은 이유를 구분한다: 측정 끄기 / 봇 / 저장소 없음", () => {
+    const storage = memoryStorage();
+    setMeasureOff(storage, true);
+    const off = deps(storage, "2026-11-01");
+    expect(sendHelpful("yes", off.value)).toBe("measure_off");
+    const bot = deps(memoryStorage(), "2026-11-01");
+    expect(sendHelpful("no", { ...bot.value, nav: { userAgent: "Googlebot/2.1" } })).toBe(
+      "unavailable",
+    );
+    const none = deps(null, "2026-11-01");
+    expect(sendHelpful("yes", none.value)).toBe("unavailable");
+    expect([...off.sent, ...bot.sent, ...none.sent]).toEqual([]);
   });
 });
 

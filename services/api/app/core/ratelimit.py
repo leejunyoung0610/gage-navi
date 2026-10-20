@@ -1,6 +1,7 @@
 """IP 기준 호출 제한 (docs/30 §1). 고정 창 방식, 프로세스 메모리에만 둔다.
 
-IP는 제한 시간이 지나면 버리고 디스크·DB·로그에 쓰지 않는다(docs/60 §5, `/privacy` 고지).
+IP는 창이 끝나면 `purge_expired`(앱의 주기 정리, `app.core.memory_sweep`)로 버리고
+디스크·DB·로그에 쓰지 않는다. 남는 최대 시간 = 창 길이 + 정리 주기(docs/60 §5, `/privacy` 고지).
 """
 
 import math
@@ -39,10 +40,17 @@ class RateLimiter:
         self._windows[key] = (started, count + 1)
         return None
 
+    def purge_expired(self) -> None:
+        """창이 끝난 IP를 지운다 (주기 정리)."""
+        self._purge(self._clock())
+
     def _purge(self, now: float) -> None:
         self._windows = {
             key: value for key, value in self._windows.items() if now - value[0] < self._window
         }
+
+    def __len__(self) -> int:
+        return len(self._windows)
 
     def reset(self) -> None:
         self._windows.clear()
@@ -51,6 +59,7 @@ class RateLimiter:
 lookup_limiter = RateLimiter(LOOKUP_LIMIT_PER_MINUTE, 60.0)
 correction_limiter = RateLimiter(CORRECTION_LIMIT_PER_HOUR, 3600.0)
 event_limiter = RateLimiter(EVENT_LIMIT_PER_MINUTE, 60.0)
+LIMITERS = (lookup_limiter, correction_limiter, event_limiter)
 
 
 def _enforce(limiter: RateLimiter, request: Request) -> None:

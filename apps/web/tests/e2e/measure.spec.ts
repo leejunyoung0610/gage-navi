@@ -50,7 +50,7 @@ test.describe("Playwright 기본 브라우저 (봇으로 판단)", () => {
     await visitHomeAndFloor(page);
     await page.getByRole("button", { name: "예" }).click();
     await expect(
-      page.getByText("통계에서 빠지기를 켜 두어서 응답을 보내지 않았어요."),
+      page.getByText("이 브라우저에서는 응답을 보낼 수 없어서 보내지 않았어요."),
     ).toBeVisible();
     await page.waitForTimeout(QUIET_MS);
     expect(measureEvents(requests)).toEqual([]);
