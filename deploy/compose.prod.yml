@@ -37,6 +37,7 @@ services:
     # Caddy가 넘긴 X-Forwarded-For로 클라이언트 주소를 읽는다(호출 제한, docs/30 §1).
     # 모든 주소를 믿는 것(`*`)은 api 포트를 열지 않아 Caddy만 api에 닿기 때문이다.
     # Caddy는 믿지 않는 곳에서 온 X-Forwarded-For를 버리고 접속한 주소로 새로 쓴다.
+    # 위조 시험 결과(2026-10-21 로컬): deploy/README.md 7단계, docs/60 §5
     command:
       - uvicorn
       - app.main:app

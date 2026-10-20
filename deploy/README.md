@@ -18,7 +18,7 @@ dc() { docker compose -f deploy/compose.prod.yml --env-file .env "$@"; }
 
 | 항목 | 정할 것 | 참고 |
 |---|---|---|
-| VM | 사양·업체 | 로컬 측정값은 아래 5단계 표. 적재 중 최대 메모리를 보고 정한다 |
+| VM | **Lightsail 2GB로 시작**(2026-10-21 결정) | 정규화 잡이 로컬에서 최대 2,122MiB(+db 488MiB)를 써서 2GB 메모리를 넘는다 → 1단계 스왑 4GB. 적재 중 OOM이면 5단계 끝의 절차로 4GB로 옮긴다 |
 | 백업 저장소 | VM 밖 저장소 하나(rclone이 붙는 곳) | 덤프 1개 크기 × 7일. 크기는 12단계 표 |
 | 도메인 | API 도메인, 웹 도메인 | 웹 `SITE_URL`, API `CORS_ALLOWED_ORIGINS`·`WEB_REVALIDATE_URL`에 들어간다 |
 
@@ -32,6 +32,22 @@ docker compose version
 확인할 출력
 - `Time zone: Asia/Seoul` — 아니면 `sudo timedatectl set-timezone Asia/Seoul` (cron 시각이 docs/03 §5 기준이다)
 - Docker Compose v2 버전 한 줄
+
+### 스왑 4GB
+
+2GB VM에서 정규화 잡(로컬 최대 2,122MiB)이 메모리를 넘기므로 적재 전에 스왑을 만든다.
+
+```
+sudo fallocate -l 4G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+free -m
+swapon --show
+```
+
+확인할 출력: `free -m`의 `Swap:` 줄 `total`이 약 `4095`, `swapon --show`에 `/swapfile` `4G` 한 줄. 재부팅 뒤에도 남는지는 `/etc/fstab` 줄로 보장한다.
 
 방화벽은 22(SSH)·80·443(TCP)·443(UDP)만 연다. DB(5432)와 API(8000)는 compose에서 포트를 열지 않는다.
 
@@ -115,6 +131,21 @@ dc ps --format '{{.Service}} {{.Status}}'
 
 한 단계가 끝나고 확인할 출력이 맞을 때 다음으로 간다. 실패하면 멈추고 출력을 붙인다. 원본 파일은 컨테이너 안에서 `/repo/data/…` 경로다.
 
+**메모리 감시** — 적재하는 동안 SSH 창을 하나 더 열어 둔다:
+
+```
+free -m -s 5
+```
+
+5초마다 메모리·스왑이 찍힌다. 정규화·기준율 단계에서 `Swap: used`가 올라가는 것은 정상이다(2GB VM). 단계마다 끝나면 원래 창에서:
+
+```
+echo "exit=$?"
+sudo dmesg -T | grep -iE 'out of memory|oom-kill|killed process' | tail -n 5
+```
+
+확인할 출력: `exit=0`, 그리고 `dmesg` 줄 없음. `exit=137`이거나 `dmesg`에 `Out of memory` / `Killed process … (python)` 줄이 있으면 OOM이다 — 멈추고 두 출력과 `free -m` 마지막 몇 줄을 붙인다.
+
 ```
 dc run --rm -T api alembic upgrade head
 dc run --rm -T api alembic current
@@ -149,6 +180,8 @@ git status --short reports/
 `—`는 잡이 1초 안에 끝나 재지 못한 값이다. 정규화가 잡 컨테이너 하나로 2GiB 넘게 쓰므로 VM 메모리는 그 시점의 db·api·caddy를 더해 여유를 둔다.
 
 리포트 확인: `git diff -U0 reports/ | grep -E '^[-+][^-+]'`가 `측정일` 두 줄(`-` 커밋된 날짜, `+` 오늘)뿐이어야 한다 — 같은 원본으로 같은 결과가 나왔다는 뜻이다. 다른 줄이 있으면 붙인다. 확인한 뒤 `git checkout reports/`로 되돌린다.
+
+**OOM이면 4GB로 옮기기**: Lightsail 콘솔에서 인스턴스 스냅샷을 만들고 → 그 스냅샷으로 4GB 플랜 새 인스턴스를 만든 뒤 → 고정 IP를 옛 인스턴스에서 떼어 새 인스턴스에 붙이고(DNS는 그대로) → 새 인스턴스에서 `free -m`·`dc ps`를 확인한 다음 옛 인스턴스를 지운다. 적재는 실패한 단계부터 다시 한다(잡은 다시 실행해도 결과가 같다).
 
 `render_search_match`는 `--commit`을 주지 않으므로 git을 부르지 않는다. 리포트는 컨테이너 안 `/tmp`에 쓰고 버린다(커밋된 `reports/search_match.md`를 덮지 않는다). 저장되는 값은 건별 결과와 DB에서 다시 뽑은 표본으로만 계산한다 — 표본이 다르면 저장하지 않고 끝난다.
 
@@ -187,6 +220,32 @@ dc logs caddy | grep -E 'remote_ip|client_ip' | grep -oE '"logger":"[^"]+"' | so
 ```
 
 결과를 docs/60 §5 "Caddy" 항목에 적는다.
+
+### X-Forwarded-For 위조가 호출 제한을 비켜 가지 않는지
+
+API는 `--proxy-headers --forwarded-allow-ips *`로 Caddy가 넘긴 `X-Forwarded-For`를 클라이언트 주소로 쓴다(호출 제한, docs/30 §1). 모든 주소를 믿어도 되는 근거는 두 가지다: API 포트를 열지 않아 밖에서는 Caddy를 거쳐야만 API에 닿고, Caddy는 믿는 프록시(`trusted_proxies`)가 설정되지 않으면 클라이언트가 보낸 `X-Forwarded-For`를 버리고 접속한 주소로 새로 쓴다.
+
+판별 방법: API가 보는 주소를 출력하는 곳이 없으므로 **IP 기준 조회 한도(분당 120회)**로 본다. 요청마다 다른 위조 주소를 붙여 125번 보냈을 때 위조값이 통과하면 요청마다 다른 키가 돼 429가 없고, 무시되면 121번째부터 429다.
+
+로컬 결과 (2026-10-21, 운영 compose, `API_DOMAIN=localhost`, `/api/v1/places/1111010100100010000`, 시나리오마다 api 재시작)
+
+| 시나리오 | 결과 | 뜻 |
+|---|---|---|
+| A. Caddy 경유, 요청마다 다른 `X-Forwarded-For` 125번 | 404 120번, **429 5번** | 위조값 무시 — 실제 접속 주소 하나로 셌다 |
+| B. Caddy 경유, `X-Forwarded-For`·`X-Real-IP`·`Forwarded` 모두 위조 125번 | 404 120번, **429 5번** | 위조값 무시 |
+| C. 대조군: compose 네트워크 안(caddy 컨테이너)에서 api:8000으로 직접, 다른 위조값 125번 | 404 125번, 429 0번 | Caddy를 건너뛰면 위조가 통과한다 — 이 시험이 위조를 알아챌 수 있다는 확인 |
+| D. 대조군: C와 같되 같은 위조값 125번 | 404 120번, 429 5번 | 직접 요청에서는 위조값이 키가 된다 |
+
+C가 보여 주듯 `*`는 **compose 네트워크 안의 컨테이너**가 보낸 위조값도 믿는다. 이 네트워크에는 db·api·caddy만 있으므로 지금은 밖에서 위조할 길이 없다. 컨테이너를 더 붙이면 이 시험을 다시 한다.
+
+VM 확인 (6단계 뒤, **로컬 터미널**에서 — 조회 한도를 1분 동안 다 쓰므로 공개 전에 한다):
+
+```
+for i in $(seq 1 125); do curl -s -o /dev/null -w '%{http_code}\n' -H "X-Forwarded-For: 203.0.113.$i" \
+  https://<API 도메인>/api/v1/places/1111010100100010000; done | sort | uniq -c
+```
+
+확인할 출력: `120 404`와 `5 429`(DB에 그 PNU가 있으면 404 대신 200). 429가 없으면 위조값이 통과한 것이니 멈추고 알려 준다 — 그때는 compose 네트워크 대역만 믿도록 바꾼다.
 
 ## 8. 관리자 계정 (🧑)
 
