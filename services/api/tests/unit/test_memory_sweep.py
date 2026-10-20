@@ -107,6 +107,32 @@ def test_purge_keeps_unexpired_cache_entries() -> None:
     assert cache.get("가상로 1", 1) is PAGE
 
 
+def test_failed_purge_is_retried_next_cycle_without_stopping_others(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    class Flaky:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.purged = False
+
+        def purge_expired(self) -> None:
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("192.0.2.1 가상로 1")  # 메시지는 로그에 남지 않아야 한다
+            self.purged = True
+
+    clock = Clock()
+    limiter = RateLimiter(5, 60.0, clock)
+    limiter.hit("192.0.2.1")
+    flaky = Flaky()
+    with caplog.at_level("WARNING", logger="app.core.memory_sweep"):
+        run_sweeps([flaky, limiter], clock, 2, lambda: None)
+    assert flaky.calls == 2 and flaky.purged  # 첫 주기 실패 뒤 다음 주기에 다시 정리
+    assert len(limiter) == 0  # 앞 대상이 실패해도 뒤 대상은 정리
+    assert [r.getMessage() for r in caplog.records] == ["memory sweep failed (RuntimeError)"]
+    assert "192.0.2.1" not in caplog.text and "가상로" not in caplog.text
+
+
 def test_app_sweeps_every_memory_store_holding_request_values() -> None:
     assert set(map(id, LIMITERS)) == {id(lookup_limiter), id(correction_limiter), id(event_limiter)}
     assert set(map(id, main_module.SWEEP_TARGETS)) == {*map(id, LIMITERS), id(search_cache)}
