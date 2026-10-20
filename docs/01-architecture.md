@@ -78,6 +78,7 @@ gage-navi/
 ├── analysis/                      # W0 검증 스크립트·결과 (참고용, 서비스 코드 아님)
 ├── eval/labels/{dev,test}/        # 규칙 추출 정답 라벨 JSON (커밋 대상)
 ├── docker-compose.yml
+├── deploy/                       # 운영 VM: compose.prod.yml, Caddyfile, 백업·복원·cron, README(실행 순서) — T-081
 ├── .env.example
 ├── Makefile                       # make setup | check | test | dev | e2e | gen-api
 ├── services/api/
@@ -146,6 +147,8 @@ gage-navi/
 | prod | web → Vercel. api + db → 단일 VM, Docker Compose, Caddy 자동 HTTPS. DB 일 1회 백업(pg_dump → 외부 저장소, 7일 보관) |
 
 공고 첨부 원문은 `STORAGE_DIR`(기본 `./storage`)에 저장하고 DB와 함께 백업한다. 배치 작업은 VM의 cron이 `docker compose run --rm api python -m jobs.<name>` 실행. 일정은 docs/03 §5.
+
+운영 VM의 파일은 `deploy/`(T-081): `compose.prod.yml`(db·api·caddy — 포트는 Caddy의 80·443만 연다), `Caddyfile`, `job.sh`(잡 실행), `backup.sh`(pg_dump -Fc → rclone으로 VM 밖 저장소, 7일), `restore-check.sh`(별도 DB에 복원해 행 수 비교), `crontab`, 실행 순서와 단계별 확인 출력은 `deploy/README.md`. API 이미지는 저장소와 같은 배치(`/repo/services/api`)로 두어 잡이 `data/`·`reports/`를 찾는다. API는 Caddy가 넘긴 `X-Forwarded-For`로 클라이언트 주소를 읽는다(`--proxy-headers`, 호출 제한용)
 
 ## 6. 보안
 

@@ -1,0 +1,82 @@
+# 운영 VM (T-081, docs/01 §5). 웹은 Vercel이고 이 파일에는 db·api·caddy만 있다.
+# 저장소 루트에서: docker compose -f deploy/compose.prod.yml --env-file .env <명령>
+# `docker compose config`는 비밀 값을 펼쳐 출력하므로 쓰지 않는다(deploy/README.md).
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-gagenavi}
+      POSTGRES_USER: ${POSTGRES_USER:-gagenavi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    # ports 없음: DB는 VM 밖으로 열지 않는다
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gagenavi} -d ${POSTGRES_DB:-gagenavi}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging: *logging
+
+  api:
+    build:
+      context: ../services/api
+    restart: unless-stopped
+    env_file: ../.env
+    environment:
+      APP_ENV: prod
+      STORAGE_DIR: /repo/storage
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-gagenavi}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-gagenavi}
+    # Caddy가 넘긴 X-Forwarded-For로 클라이언트 주소를 읽는다(호출 제한, docs/30 §1).
+    # 모든 주소를 믿는 것(`*`)은 api 포트를 열지 않아 Caddy만 api에 닿기 때문이다.
+    # Caddy는 믿지 않는 곳에서 온 X-Forwarded-For를 버리고 접속한 주소로 새로 쓴다.
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --proxy-headers
+      - --forwarded-allow-ips
+      - "*"
+    # ports 없음: 밖에서는 Caddy(443)로만 들어온다
+    expose:
+      - "8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ../data:/repo/data:ro        # 원본 파일 (gitignore, 읽기 전용)
+      - ../storage:/repo/storage     # STORAGE_DIR (Gate 1 시점에는 비어 있다)
+      - ../reports:/repo/reports     # 적재 잡이 쓰는 리포트. 커밋된 리포트와 git diff로 비교한다
+    logging: *logging
+
+  caddy:
+    image: caddy:2.10.2
+    restart: unless-stopped
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?set API_DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data             # 인증서. 지우면 다시 발급한다
+      - caddy_config:/config
+    depends_on:
+      - api
+    logging: *logging
+
+volumes:
+  dbdata:
+  caddy_data:
+  caddy_config:

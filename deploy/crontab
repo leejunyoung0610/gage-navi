@@ -1,0 +1,12 @@
+# 운영 VM cron (T-081, docs/03 §5·docs/01 §5). VM 시간대가 Asia/Seoul이어야 한다(deploy/README.md 1단계).
+# 설치: crontab -l 로 기존 줄을 먼저 본 뒤, 이 파일의 줄을 crontab -e 로 붙인다.
+# GAGE_NAVI_DIR은 VM의 저장소 경로, BACKUP_RCLONE_REMOTE는 rclone 원격 이름:경로로 바꾼다.
+GAGE_NAVI_DIR=/srv/gage-navi
+BACKUP_RCLONE_REMOTE=CHANGE-ME:gage-navi-backup
+
+# DB 백업, 매일 03:30
+30 3 * * * $GAGE_NAVI_DIR/deploy/backup.sh >> $HOME/gage-navi-backup.log 2>&1
+# 정정 요청 메시지 삭제(처리 후 1년)·웹 재생성 재시도, 매일 04:00 (출력은 건수만)
+0 4 * * * $GAGE_NAVI_DIR/deploy/job.sh correction_maintenance >> $HOME/gage-navi-jobs.log 2>&1
+# 월 1회 인허가 적재는 사람이 파일을 내려받은 뒤 실행한다(ADR-025) — cron에 넣지 않는다
+# 공고 수집(collect_announcements)은 보류(ADR-030)
