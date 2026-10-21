@@ -26,6 +26,8 @@ describe("PlaceError", () => {
       <PlaceError error={new Error("장소 API 오류 (429)")} reset={() => {}} />,
     );
     expect(container.textContent).not.toContain("429");
+    // 서비스 워커는 500을 그대로 보여 주므로 "이미 본 페이지는 열린다"고 쓰지 않는다 (docs/40 §7)
+    expect(container.textContent).not.toContain("본 적 있는");
   });
 
   it("다시 시도는 서버 데이터를 새로 받고 다시 그린다", () => {
