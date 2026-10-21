@@ -269,7 +269,9 @@
   - **조건**: 운영 VM에서 층 조회의 지속 처리량을 재고(`deploy/README.md` "처리량 측정"), 600/분이 그 절반을 넘으면 한도를 절반(분당 값, 내림)으로 낮춘다. 낮추면 이 ADR과 docs/30 §1을 고친다
 - **결과**
   - **한계**: 공유 한도라 누군가 캐시되지 않은 페이지를 대량으로 열면, 그동안 모든 사용자가 **새 페이지**에서 한도 초과 화면을 볼 수 있다(이미 만들어진 페이지는 ISR 캐시로 계속 나간다). 서버 렌더링 구조상 IP 한도에서도 같다 — Vercel 쪽 주소 몇 개로 모이기 때문이다. 방문자 IP별 제한을 가장자리(Vercel 등 웹 앞단)에서 거는 일은 제안 티켓으로 둔다(docs/80)
-  - 한도에 걸린 응답은 웹이 캐시하지 않는다. 지금 웹은 API의 429를 받으면 페이지 생성을 실패로 끝내고, Next.js가 `500`과 `Cache-Control: private, no-cache, no-store, max-age=0, must-revalidate`로 응답한다(로컬 확인 2026-10-21, Next.js 15.5.27, 가짜 API가 429를 주는 상태). App Router 페이지는 응답 상태 코드와 `Retry-After` 헤더를 직접 정하지 못해(`notFound`·`forbidden`·`unauthorized`·redirect만 있다) **`503 + Retry-After`는 아직 정하지 않았다** — 사용자 결정 대기(T-081)
+  - 한도에 걸린 응답은 웹이 캐시하지 않는다. 지금 웹은 API의 429를 받으면 페이지 생성을 실패로 끝내고, Next.js가 `500`과 `Cache-Control: private, no-cache, no-store, max-age=0, must-revalidate`로 응답한다(로컬 확인 2026-10-21, Next.js 15.5.27, 가짜 API가 429를 주는 상태). App Router 페이지는 응답 상태 코드와 `Retry-After` 헤더를 직접 정하지 못한다(`notFound`·`forbidden`·`unauthorized`·redirect만 있다)
+  - **한도 초과 응답은 `500` + `no-store` + 오류 화면(`app/place/error.tsx`)으로 둔다** (2026-10-21, 사용자 — (가)안). `503 + Retry-After`로 바꾸려면 필지·층 페이지를 Route Handler나 Pages Router로 옮겨야 하는데, 얻는 것이 거의 없다: Google 검색 센터 문서(https://developers.google.com/search/docs/crawling-indexing/http-network-errors, 사용자 확인 2026-10-21)는 500·502·503을 같은 5xx로 다루고(크롤링 속도를 낮춘다) `Retry-After`는 언급하지 않는다. 사람에게는 화면 문구("1분쯤 뒤에 다시 열어 주세요")가 `Retry-After`를 대신한다
+  - 처리량 측정(`jobs.measure_place_throughput`)은 compose 네트워크 안에서 `X-Forwarded-For`를 바꿔 IP 한도를 비켜 간다. 운영 코드에 한도를 끄는 설정은 없다(2026-10-21 사용자 확인)
   - 비밀 값이 새면 그 값을 가진 사람은 IP 한도를 비켜 공유 한도를 다 쓸 수 있다. 그때는 두 곳의 값을 바꾼다
 
 ---

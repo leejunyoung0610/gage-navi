@@ -22,7 +22,6 @@ export default function PlaceError({ reset }: { error: Error; reset: () => void 
       <p className="mt-4">
         요청이 한꺼번에 몰렸거나 일시적인 문제가 생겼어요. 1분쯤 뒤에 다시 열어 주세요.
       </p>
-      <p className="text-muted mt-2 text-sm">이미 본 적 있는 페이지는 계속 열 수 있어요.</p>
       <div className="mt-4 flex flex-wrap gap-4">
         <button
           type="button"
