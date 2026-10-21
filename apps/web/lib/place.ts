@@ -5,7 +5,7 @@
  * 관련 필지 확인(주소 검색 재호출, docs/40 §4.3)만 브라우저에서 부른다.
  */
 import { searchAddress } from "@/lib/address";
-import { apiBaseUrl } from "@/lib/api-base";
+import { apiBaseUrl, serverRenderHeaders } from "@/lib/api-base";
 import type { components } from "@/lib/api/types";
 
 export type PlaceData = components["schemas"]["PlaceData"];
@@ -30,6 +30,7 @@ export type Lookup<T> =
 
 async function lookup<T>(path: string): Promise<Lookup<T>> {
   const response = await fetch(`${apiBaseUrl()}/api/v1${path}`, {
+    headers: serverRenderHeaders(),
     next: { revalidate: PLACE_REVALIDATE_SECONDS },
   });
   if (response.status === 422) return { kind: "invalid" };

@@ -10,3 +10,17 @@ export function apiBaseUrl(): string {
   if (!value) throw new Error(`${name}가 설정되지 않았어요`);
   return value.replace(/\/+$/, "");
 }
+
+/** 서버 렌더링 공유 한도 헤더 이름 (ADR-031). API(`app/core/ratelimit.py`)와 같아야 한다 */
+export const SSR_SECRET_HEADER = "x-ssr-secret";
+
+/**
+ * 서버 렌더링 조회에 붙이는 헤더 (docs/30 §1, ADR-031). 서버 전용 환경 변수 `API_SSR_SECRET`이 있을 때만.
+ * `NEXT_PUBLIC_`이 아니라 브라우저 번들에 들어가지 않고, 브라우저에서는 늘 빈 헤더다.
+ * 값이 없으면 API가 IP 기준으로 센다(오류로 만들지 않는다)
+ */
+export function serverRenderHeaders(): Record<string, string> {
+  if (typeof window !== "undefined") return {};
+  const secret = process.env.API_SSR_SECRET;
+  return secret ? { [SSR_SECRET_HEADER]: secret } : {};
+}
