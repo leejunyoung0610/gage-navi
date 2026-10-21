@@ -2,7 +2,7 @@
  * 사이트맵 (docs/40 §9, T-035). `/sitemap.xml`은 사이트맵 색인, `/sitemaps/{시군구}-{n}.xml`은 그 시군구의
  * 층 페이지 목록(파일당 50,000개 이하). 데이터는 요청 때 API(docs/30 `sitemap/sigungu`)에서 읽는다.
  */
-import { apiBaseUrl } from "@/lib/api-base";
+import { apiBaseUrl, serverRenderHeaders } from "@/lib/api-base";
 import type { components } from "@/lib/api/types";
 import { SITEMAP_MAX_URLS } from "@/lib/indexing";
 import { PLACE_REVALIDATE_SECONDS } from "@/lib/place";
@@ -17,6 +17,7 @@ const FILE_PATTERN = /^(\d{5})-([1-9]\d*)\.xml$/;
 async function getJson<T>(path: string): Promise<T> {
   // 층 페이지와 같은 주기(1일)로 캐시한다 (docs/40 §2)
   const response = await fetch(`${apiBaseUrl()}/api/v1${path}`, {
+    headers: serverRenderHeaders(),
     next: { revalidate: PLACE_REVALIDATE_SECONDS },
   });
   if (!response.ok) throw new Error(`사이트맵 API 오류 (${response.status})`);

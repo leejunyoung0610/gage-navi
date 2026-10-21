@@ -37,6 +37,7 @@
 **CORS** (T-032, 2026-10-19): 웹은 브라우저에서 공개 API를 바로 부른다(주소 검색·좌표 결과). 환경 변수 `CORS_ALLOWED_ORIGINS`(쉼표로 구분한 출처 목록, 예 `http://localhost:3000`)에 적힌 출처만 허용한다. 값이 없으면 어느 출처도 허용하지 않는다(기본값으로 `*`를 쓰지 않는다). 허용 메서드는 브라우저가 부르는 `GET`과 정정 요청(`POST /places/{pnu}/corrections`, T-033 정정 요청 시트)·측정 이벤트(`POST /measure/events`, T-104)의 `POST`이고, 허용 요청 헤더는 JSON 본문용 `Content-Type`뿐이다(T-033, 2026-10-19). 자격 증명(쿠키)은 허용하지 않는다. 운영 도메인 등록은 T-081
 
 **호출 제한(IP 기준)**: 조회 120회/분(주소 검색 포함), 평가(`*/evaluate`) 20회/분, 정정 요청 5회/시간, 측정 이벤트 120회/분(조회와 따로 센다, T-104). IP는 프로세스 메모리에만 두고 제한 시간이 지나면 버린다(docs/60 §5).
+**서버 렌더링 공유 한도** (ADR-031, 2026-10-21): 조회 요청의 헤더 `x-ssr-secret`이 환경 변수 `API_SSR_SECRET`과 같으면 IP 한도 대신 **서버 렌더링 요청 전체를 하나로 세는 600회/분**을 적용한다. 헤더가 없거나 틀리면 IP 기준이다(401이 아니다). `API_SSR_SECRET`이 없으면 헤더를 보지 않는다. 웹 서버(필지·층 페이지, 사이트맵)만 이 헤더를 보내고 값은 서버 전용 환경 변수다. 초과하면 IP 한도와 같은 429 `RATE_LIMITED` + `Retry-After`. 운영 VM 처리량 측정 뒤 낮출 수 있다(ADR-031 조건)
 **압축**: 요청에 `Accept-Encoding: gzip`이 있고 응답 본문이 1,000바이트 이상이면 gzip으로 압축한다(T-022). 큰 목록(층 이력 `history`, 층 미상 기록 `history_without_floor`)을 자르지 않고 전부 내보내는 대신 압축한다.
 **캐시**: 장소 조회 `Cache-Control: public, max-age=300` (API 앞에 CDN 없음) / 평가 `no-store`. 웹의 장소 페이지는 ISR(1일)이며, 관리자가 정정 요청으로 기록을 숨기면 API가 웹의 `POST /api/revalidate`(헤더 `x-revalidate-secret`)를 호출해 해당 `/place/{pnu}`·`/place/{pnu}/{floor}`를 즉시 재생성한다.
 

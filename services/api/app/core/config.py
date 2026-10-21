@@ -13,6 +13,7 @@ class Settings:
     web_revalidate_url: str | None = None  # 웹 on-demand 재생성 (docs/30 §3, T-023)
     revalidate_secret: str | None = field(default=None, repr=False)
     cors_allowed_origins: tuple[str, ...] = ()  # 비면 어느 출처도 허용하지 않는다 (docs/30 §1)
+    ssr_secret: str | None = field(default=None, repr=False)  # 서버 렌더링 공유 한도 (ADR-031)
 
 
 def parse_origins(raw: str | None) -> tuple[str, ...]:
@@ -31,4 +32,5 @@ def get_settings() -> Settings:
         web_revalidate_url=os.environ.get("WEB_REVALIDATE_URL") or None,
         revalidate_secret=os.environ.get("REVALIDATE_SECRET") or None,
         cors_allowed_origins=parse_origins(os.environ.get("CORS_ALLOWED_ORIGINS")),
+        ssr_secret=os.environ.get("API_SSR_SECRET") or None,
     )

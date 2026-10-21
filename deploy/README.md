@@ -69,6 +69,7 @@ cp .env.example .env && chmod 600 .env
 | `CORS_ALLOWED_ORIGINS` | `https://<웹 도메인>` 하나. `localhost`·`*`를 넣지 않는다(docs/30 §1) |
 | `WEB_REVALIDATE_URL` | `https://<웹 도메인>/api/revalidate` |
 | `REVALIDATE_SECRET` | 새 무작위 값. Vercel에도 같은 값 |
+| `API_SSR_SECRET` | 새 무작위 값(영문·숫자 — 헤더 값이다). Vercel에도 같은 값. 서버 렌더링 공유 한도(ADR-031) |
 | `JUSO_CONFM_KEY` | 도로명주소 승인키 (Gate 1 전에 운영 키로 — docs/50 §7) |
 | `KAKAO_REST_API_KEY` | 카카오 REST 키 |
 | `TZ` | `Asia/Seoul` |
@@ -78,13 +79,13 @@ cp .env.example .env && chmod 600 .env
 넣었는지만 확인(이름과 set/EMPTY만 나온다):
 
 ```
-for k in POSTGRES_PASSWORD API_DOMAIN CORS_ALLOWED_ORIGINS WEB_REVALIDATE_URL REVALIDATE_SECRET JUSO_CONFM_KEY KAKAO_REST_API_KEY; do
+for k in POSTGRES_PASSWORD API_DOMAIN CORS_ALLOWED_ORIGINS WEB_REVALIDATE_URL REVALIDATE_SECRET API_SSR_SECRET JUSO_CONFM_KEY KAKAO_REST_API_KEY; do
   grep -qE "^$k=[^[:space:]#]" .env && echo "$k set" || echo "$k EMPTY"; done
-grep -cE '^(POSTGRES_PASSWORD|REVALIDATE_SECRET)=change-me' .env
+grep -cE '^(POSTGRES_PASSWORD|REVALIDATE_SECRET|API_SSR_SECRET)=change-me' .env
 grep -E '^CORS_ALLOWED_ORIGINS=' .env | grep -cE 'localhost|\*'
 ```
 
-확인할 출력: 일곱 줄 모두 `set`, 그다음 두 줄은 `0`과 `0`.
+확인할 출력: 여덟 줄 모두 `set`, 그다음 두 줄은 `0`과 `0`.
 
 ## 3. 원본 데이터 옮기기 (로컬 → VM)
 
@@ -247,6 +248,47 @@ for i in $(seq 1 125); do curl -s -o /dev/null -w '%{http_code}\n' -H "X-Forward
 
 확인할 출력: `120 404`와 `5 429`(DB에 그 PNU가 있으면 404 대신 200). 429가 없으면 위조값이 통과한 것이니 멈추고 알려 준다 — 그때는 compose 네트워크 대역만 믿도록 바꾼다.
 
+## 7-1. 처리량 측정 (ADR-031 조건, 공개 전 1회)
+
+서버 렌더링 공유 한도(분당 600, docs/30 §1)가 이 VM이 버티는 양의 절반을 넘지 않는지 본다. 5단계 적재와 6단계 시작이 끝난 뒤, 공개 전에 한다(측정하는 동안 API가 바빠진다).
+
+- **도구**: `jobs.measure_place_throughput`(저장소 코드, API 이미지에 들어 있다). compose 네트워크 안에서 `api:8000`에 직접 보낸다 — Caddy·TLS를 거치지 않으므로 API·DB가 버티는 양을 잰다. 요청마다 다른 `X-Forwarded-For`를 붙여 IP 한도를 비켜 간다(7단계 대조군 C와 같은 원리)
+- **요청**: `floor_summary`에서 고정 순서로 뽑은 층 2,000개의 `GET /api/v1/places/{pnu}/floors/{floor}`를 돌아가며 부른다(서버 렌더링이 가장 많이 부르는 조회)
+- **동시 접속 수**: 4 → 8 → 16 → 32, 단계마다 60초(모두 약 4분). 작업자는 응답을 받자마자 다음 요청을 보낸다
+- **판정**: 단계마다 **오류율(200이 아닌 응답·통신 오류) < 1%**이고 **p95 ≤ 500ms**면 통과. 통과한 단계 중 가장 높은 초당 처리량이 지속 처리량이다. 오류율 1%는 docs/01 §7 경보(5xx 1%)와 같은 선이고, 500ms는 Vercel → VM 왕복과 페이지 생성 시간을 더해도 첫 화면이 늦지 않게 잡은 값이다
+- **조건**: 분당 600이 **지속 처리량 × 60 ÷ 2를 넘으면** 한도를 그 값(분당, 내림)으로 낮춘다. 출력의 `lower_limit_to`가 그 값이다(`null`이면 그대로). 낮출 때는 ADR-031과 docs/30 §1을 먼저 고치고 `SSR_LOOKUP_LIMIT_PER_MINUTE`를 바꾼다
+
+```
+free -m
+dc run --rm -T api python -m jobs.measure_place_throughput
+free -m
+sudo dmesg -T | grep -iE 'out of memory|oom-kill|killed process' | tail -n 5
+```
+
+확인할 출력: 단계마다 한 줄 `{"concurrency": 4, "requests": …, "rps": …, "p50_ms": …, "p95_ms": …, "error_rate": …, "passed": true|false}`, 마지막 줄 `{"floors_sampled": 2000, "sustained_rps": …, "half_per_minute": …, "lower_limit_to": …}`. `dmesg` 줄은 없어야 한다. 이 출력 전체를 붙인다.
+
+로컬 참고값 (2026-10-21, macOS Docker, 새 적재 DB, 단계마다 30초 — VM 판정에는 쓰지 않는다)
+
+| 동시 접속 | 초당 처리량 | p50 | p95 | 오류율 | 통과 |
+|---|---|---|---|---|---|
+| 4 | 605.0 | 5.9ms | 9.0ms | 0 | ✓ |
+| 8 | 665.1 | 10.8ms | 18.6ms | 0 | ✓ |
+| 16 | 647.9 | 22.8ms | 28.0ms | 0 | ✓ |
+| 32 | 635.6 | 46.0ms | 84.3ms | 0 | ✓ |
+
+지속 처리량 665.1/초 → 절반은 분당 19,953이라 600은 그대로(`lower_limit_to: null`). 동시 접속을 늘려도 처리량이 600대에서 멈춰, 측정 도구(프로세스 하나)나 uvicorn 워커 하나가 병목일 수 있다 — 이 값은 API가 버티는 양의 **하한**이다. 판정은 한도의 두 배(초당 20)를 넘는지만 보므로 하한으로 충분하다. 2GB VM은 CPU가 적어 이보다 낮게 나온다.
+
+서버 렌더링 헤더가 동작하는지(비밀 값을 출력하지 않는다 — 헤더를 권한 600 임시 파일로 넘긴다). **로컬 터미널**이 아니라 VM에서:
+
+```
+umask 077; printf 'x-ssr-secret: %s\n' "$(sed -n 's/^API_SSR_SECRET=//p' .env)" > /tmp/ssr.h
+for i in $(seq 1 125); do curl -s -o /dev/null -w '%{http_code}\n' -H @/tmp/ssr.h \
+  https://<API 도메인>/api/v1/places/1111010100100010000; done | sort | uniq -c
+rm /tmp/ssr.h
+```
+
+확인할 출력: 125번 모두 404(또는 200) — 121번째부터 429가 나오면 헤더가 맞지 않아 IP 한도로 센 것이다. 7단계 위조 시험 바로 뒤라면 1분 기다린 뒤 한다.
+
 ## 8. 관리자 계정 (🧑)
 
 ```
@@ -277,6 +319,7 @@ Vercel 프로젝트의 루트 디렉터리는 `apps/web`. 환경 변수(Producti
 | `NEXT_PUBLIC_API_BASE_URL` | `https://<API 도메인>` (빌드 때 번들에 들어간다 — 바꾸면 다시 배포) |
 | `API_INTERNAL_URL` | `https://<API 도메인>` (서버 렌더링) |
 | `REVALIDATE_SECRET` | VM `.env`와 같은 값 |
+| `API_SSR_SECRET` | VM `.env`와 같은 값. **`NEXT_PUBLIC_`을 붙이지 않는다**(붙이면 브라우저 번들에 들어간다 — ADR-031) |
 | `NEXT_PUBLIC_KAKAO_JS_KEY` | 카카오 JavaScript 키. 카카오 개발자 콘솔에 `https://<웹 도메인>`을 사이트 도메인으로 등록 |
 | `INDEXING_ENABLED` | `false` (Gate 1 전, docs/40 §9) |
 | `SITE_URL` | `https://<웹 도메인>` |

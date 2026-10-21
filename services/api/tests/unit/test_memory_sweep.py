@@ -23,6 +23,7 @@ from app.core.ratelimit import (
     correction_limiter,
     event_limiter,
     lookup_limiter,
+    ssr_limiter,
 )
 
 PAGE = JusoPage(items=(JusoItem("가상로 1", "가상동 1", None, None),), page=1, total=1)
@@ -134,7 +135,12 @@ def test_failed_purge_is_retried_next_cycle_without_stopping_others(
 
 
 def test_app_sweeps_every_memory_store_holding_request_values() -> None:
-    assert set(map(id, LIMITERS)) == {id(lookup_limiter), id(correction_limiter), id(event_limiter)}
+    assert set(map(id, LIMITERS)) == {
+        id(lookup_limiter),
+        id(correction_limiter),
+        id(event_limiter),
+        id(ssr_limiter),
+    }
     assert set(map(id, main_module.SWEEP_TARGETS)) == {*map(id, LIMITERS), id(search_cache)}
 
 
